@@ -1,0 +1,915 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Controle de Cientificação Postal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600&family=Barlow:wght@400;500&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+:root{
+  --bg:#efeee9;--surface:#ffffff;--ink:#373435;--muted:#6a655a;--line:#d8d3c6;
+  --caqui:#a08f63;--caqui-ink:#6b5c37;--caqui-soft:#ece5d3;--band:#373435;--band-ink:#f1ede2;
+  --ok:#2e7348;--ok-soft:#e1efe5;--warn:#8a5d00;--warn-soft:#f6ebd2;--bad:#ad3329;--bad-soft:#f7e1de;
+  --info:#3c5a7a;--info-soft:#e3eaf2;
+  --f-display:"Barlow Semi Condensed","Arial Narrow",Arial,sans-serif;
+  --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#191816;--surface:#23221f;--ink:#ecebe5;--muted:#a8a294;--line:#3a3832;
+  --caqui:#b8a676;--caqui-ink:#d6c99f;--caqui-soft:#353023;--band:#0f0f0e;--band-ink:#ece6d4;
+  --ok:#72c793;--ok-soft:#1f3527;--warn:#e2b250;--warn-soft:#3a2f16;--bad:#f08b7f;--bad-soft:#41221e;
+  --info:#9fbad6;--info-soft:#1f2a36;color-scheme:dark}}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.5;min-height:100vh;display:flex;flex-direction:column}
+.wrap{width:100%;max-width:980px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.band{background:var(--band);color:var(--band-ink);border-bottom:3px solid var(--caqui);padding-top:env(safe-area-inset-top,0px)}
+.band .wrap{padding-block:16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.band img{width:44px;height:44px;object-fit:contain}
+.marca{display:flex;flex-direction:column;gap:2px;flex:1 1 260px;min-width:0}
+.eyebrow{font-family:var(--f-display);font-weight:500;font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--caqui)}
+h1{font-family:var(--f-display);font-weight:600;font-size:26px;line-height:1.1;margin:0}
+.quem{display:flex;align-items:center;gap:10px;font-size:14px;flex-wrap:wrap}
+.quem strong{font-weight:500}
+.quem button{background:transparent;color:var(--band-ink);border:1px solid var(--caqui);border-radius:8px;padding:6px 12px;font-family:var(--f-display);font-weight:600;font-size:14px;cursor:pointer}
+main{flex:1;padding-block:20px 48px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:20px;display:flex;flex-direction:column;gap:16px}
+.estreito{max-width:560px;margin:0 auto}
+h2{font-family:var(--f-display);font-weight:600;font-size:22px;margin:0}
+h3{font-family:var(--f-display);font-weight:600;font-size:18px;margin:0}
+.note{font-size:14px;color:var(--muted);margin:0}
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.lbl{font-family:var(--f-display);font-weight:500;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+input,select{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;height:44px;padding:0 12px;width:100%;min-width:0}
+input[readonly]{background:var(--bg);color:var(--muted)}
+input[type=checkbox],input[type=radio]{width:auto;height:auto}
+:focus-visible{outline:2px solid var(--caqui);outline-offset:2px}
+.mono{font-family:var(--f-mono);letter-spacing:.06em}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 18px;border-radius:8px;font-family:var(--f-display);font-weight:600;font-size:16px;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+.btn.primary{background:var(--caqui);border-color:var(--caqui);color:#2a2820}
+.btn.small{min-height:34px;padding:0 12px;font-size:14px}
+.btn.link{border:0;background:none;color:var(--caqui-ink);text-decoration:underline;padding:0;min-height:0;font-family:var(--f-body);font-weight:500;font-size:15px}
+.btn:disabled{opacity:.6;cursor:wait}
+.btn svg{width:18px;height:18px;flex:none}
+.actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;align-items:center}
+.msg{font-size:14px;margin:0;min-height:1.4em}
+.msg.ok{color:var(--ok)}.msg.warn{color:var(--warn)}.msg.bad{color:var(--bad)}.msg.info{color:var(--muted)}
+.check{display:flex;gap:10px;align-items:flex-start;font-size:15px;cursor:pointer}
+.check input{margin-top:4px;accent-color:var(--caqui)}
+.tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin-bottom:16px}
+.tab{font-family:var(--f-display);font-weight:600;font-size:16px;background:none;border:0;border-bottom:3px solid transparent;color:var(--muted);padding:10px 14px;cursor:pointer;margin-bottom:-1px}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--caqui)}
+.sraibar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+.sraibar select{width:auto;min-width:220px}
+.counters{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.counter{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:2px;font:inherit;color:var(--ink)}
+.counter b{font-family:var(--f-display);font-weight:600;font-size:28px;line-height:1;font-variant-numeric:tabular-nums}
+.counter span{font-size:14px;color:var(--muted)}
+.counter[aria-pressed="true"]{border:2px solid var(--caqui);padding:11px 13px;background:var(--caqui-soft)}
+.counter.gaia b{color:var(--warn)}
+.filtros{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.filtros input[type=search]{flex:1 1 220px;width:auto}
+.filtros select{width:auto}
+ul.lista{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.item{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+.item.destaque{border-color:var(--warn);background:var(--warn-soft)}
+.item-top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.cod{font-family:var(--f-mono);font-size:16px;letter-spacing:.05em}
+.meta{font-size:14px;color:var(--muted);overflow-wrap:anywhere}
+.meta strong{color:var(--ink);font-weight:500}
+.item-acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.chip{font-family:var(--f-display);font-weight:500;font-size:13px;letter-spacing:.05em;text-transform:uppercase;padding:2px 10px;border-radius:999px;white-space:nowrap}
+.chip.ok{background:var(--ok-soft);color:var(--ok)}.chip.bad{background:var(--bad-soft);color:var(--bad)}
+.chip.warn{background:var(--warn-soft);color:var(--warn)}.chip.aguarda{background:var(--caqui-soft);color:var(--caqui-ink)}
+.chip.transito{background:var(--info-soft);color:var(--info)}.chip.cancel{background:var(--bg);color:var(--muted)}
+.vazio{text-align:center;padding:32px 16px;color:var(--muted)}
+.code-row{display:flex;gap:8px;flex-wrap:wrap}
+#cod{flex:1 1 220px;font-family:var(--f-mono);font-size:18px;letter-spacing:.08em;text-transform:uppercase}
+.cam{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 14px;border-radius:8px;background:var(--caqui-soft);color:var(--caqui-ink);border:1px solid var(--caqui);font-family:var(--f-display);font-weight:600;font-size:15px;cursor:pointer}
+.cam svg{width:18px;height:18px}
+.live{position:relative;border-radius:8px;overflow:hidden;background:#000}
+.live video{width:100%;display:block;max-height:60vh;object-fit:cover}
+.live .guide{position:absolute;left:8%;right:8%;top:38%;height:24%;border:2px solid var(--caqui);border-radius:6px;pointer-events:none}
+.tipos{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.tipo{position:relative;cursor:pointer}
+.tipo input{position:absolute;opacity:0;width:1px;height:1px}
+.tipo span{display:flex;flex-direction:column;gap:2px;border:1px solid var(--line);border-radius:8px;padding:12px 14px;height:100%}
+.tipo strong{font-family:var(--f-display);font-weight:600;font-size:17px}
+.tipo em{font-style:normal;font-size:14px;color:var(--muted)}
+.tipo input:checked+span{border:2px solid var(--caqui);padding:11px 13px;background:var(--caqui-soft)}
+.tipo input:focus-visible+span{outline:2px solid var(--caqui);outline-offset:2px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--band);color:var(--band-ink);padding:10px 18px;border-radius:8px;font-size:15px;max-width:calc(100% - 32px);z-index:20;box-shadow:0 4px 16px rgba(0,0,0,.2)}
+footer{font-size:13px;color:var(--muted)}
+footer .wrap{padding-block:16px;border-top:1px solid var(--line)}
+@media (prefers-reduced-motion:no-preference){.btn,.counter,.tab,.tipo span{transition:background .15s,border-color .15s,color .15s}}
+</style>
+</head>
+<body>
+
+<header class="band">
+  <div class="wrap">
+    <img id="escudo" src="escudo.png" alt="" onerror="this.remove()">
+    <div class="marca">
+      <span class="eyebrow">Sala de Apoio Virtual · BPM MAMB</span>
+      <h1>Controle de Cientificação Postal</h1>
+    </div>
+    <div class="quem" id="quem" hidden>
+      <span>Você está como <strong id="quemNome"></strong></span>
+      <button type="button" id="btnSair">Sair</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- Entrada -->
+  <section id="v-entrada">
+    <form class="card estreito" id="f-entrada" novalidate>
+      <h2>Entrar</h2>
+      <div class="field">
+        <label class="lbl" for="e-cpf">CPF</label>
+        <input id="e-cpf" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" maxlength="14">
+      </div>
+      <p class="msg" id="e-msg" role="status"></p>
+      <div class="actions">
+        <button type="submit" class="btn primary" id="e-btn">Entrar</button>
+      </div>
+      <p class="note">Primeiro acesso? <button type="button" class="btn link" id="irCadastro">Faça o seu cadastro</button></p>
+    </form>
+  </section>
+
+  <!-- Primeiro cadastro -->
+  <section id="v-cadastro" hidden>
+    <form class="card estreito" id="f-cadastro" novalidate>
+      <h2>Primeiro cadastro</h2>
+      <p class="note">Leva um minuto e é feito uma vez só. Depois você entra apenas com o CPF.</p>
+      <div class="field">
+        <label class="lbl" for="c-nome">Nome completo</label>
+        <input id="c-nome" autocomplete="off" placeholder="FULANO DE TAL DA SILVA" style="text-transform:uppercase">
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label class="lbl" for="c-posto">Posto ou graduação</label>
+          <select id="c-posto"></select>
+        </div>
+        <div class="field">
+          <label class="lbl" for="c-npm">Nº PM</label>
+          <input id="c-npm" inputmode="numeric" autocomplete="off" placeholder="000.000-0" maxlength="9" class="mono">
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label class="lbl" for="c-cpf">CPF</label>
+          <input id="c-cpf" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" maxlength="14">
+        </div>
+        <div class="field">
+          <label class="lbl" for="c-cpf2">Confirme o CPF</label>
+          <input id="c-cpf2" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" maxlength="14">
+        </div>
+      </div>
+      <label class="check"><input type="checkbox" id="c-aviso"> <span>Quero receber por e-mail o aviso de entrega das cientificações dos meus autos</span></label>
+      <div class="field" id="c-email-wrap" hidden>
+        <label class="lbl" for="c-email">E-mail</label>
+        <input id="c-email" type="email" autocomplete="email" placeholder="seu.email@exemplo.com">
+        <p class="note">Vamos enviar um código de 6 dígitos para confirmar.</p>
+      </div>
+      <p class="msg" id="c-msg" role="status"></p>
+      <div class="actions">
+        <button type="button" class="btn" id="c-voltar">Voltar</button>
+        <button type="submit" class="btn primary" id="c-btn">Cadastrar</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- Confirmação de e-mail -->
+  <section id="v-codigo" hidden>
+    <form class="card estreito" id="f-codigo" novalidate>
+      <h2>Confirme o seu e-mail</h2>
+      <p class="note">Enviamos um código de 6 dígitos para <strong id="k-email"></strong>. Ele vale por 10 minutos.</p>
+      <div class="field">
+        <label class="lbl" for="k-codigo">Código</label>
+        <input id="k-codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="6" class="mono" placeholder="000000">
+      </div>
+      <p class="msg" id="k-msg" role="status"></p>
+      <div class="actions">
+        <button type="button" class="btn" id="k-depois">Fazer isso depois</button>
+        <button type="submit" class="btn primary" id="k-btn">Confirmar</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- Painel -->
+  <section id="v-app" hidden>
+    <nav class="tabs" id="tabs" role="tablist"></nav>
+
+    <div class="sraibar" id="sraibar" hidden>
+      <label class="lbl" for="sraiSel">SRAI</label>
+      <select id="sraiSel"></select>
+    </div>
+
+    <!-- Postagens da SRAI -->
+    <section id="t-postagens" hidden>
+      <div class="counters" id="counters"></div>
+      <div class="filtros" style="margin-top:16px">
+        <input type="search" id="busca" placeholder="Buscar por código ou nº do auto" autocomplete="off">
+        <select id="fTipo" aria-label="Tipo"><option value="">Todos os tipos</option><option value="CIENTIFICACAO">Cientificação</option><option value="INTERNA">Interna</option></select>
+        <select id="fAno" aria-label="Ano do auto"><option value="">Todos os anos</option></select>
+        <label class="check" style="align-items:center"><input type="checkbox" id="fCanceladas"> <span>Mostrar canceladas</span></label>
+        <button type="button" class="btn small" id="recarregar">Atualizar</button>
+      </div>
+      <p class="msg info" id="p-msg" role="status" style="margin-top:10px"></p>
+      <ul class="lista" id="p-lista"></ul>
+    </section>
+
+    <!-- Cadastrar postagem -->
+    <section id="t-cadastrar" hidden>
+      <form class="card" id="f-postagem" novalidate style="max-width:640px">
+        <h2>Cadastrar postagem</h2>
+        <p class="note">Para a SRAI: <strong id="pp-srai"></strong></p>
+
+        <div class="field">
+          <label class="lbl" for="cod">Código de rastreio</label>
+          <div class="code-row">
+            <input id="cod" maxlength="13" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="AA123456785BR">
+            <button type="button" class="cam" id="camBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+              Ler com a câmera
+            </button>
+          </div>
+          <input type="file" id="foto" class="sr" accept="image/*" capture="environment" tabindex="-1" aria-hidden="true">
+          <input type="file" id="foto2" class="sr" accept="image/*" tabindex="-1" aria-hidden="true">
+          <div class="live" id="live" hidden><video id="vid" playsinline muted></video><div class="guide"></div></div>
+          <div class="actions" id="liveBar" hidden style="justify-content:space-between"><span class="note">Aponte para o código de barras do rastreio.</span><button type="button" class="btn small" id="liveStop">Cancelar</button></div>
+          <p class="msg info" id="cst" role="status">Bipe a etiqueta, use a câmera ou digite o código.</p>
+          <p class="note">A câmera não abriu? <label for="foto2" class="btn link">Escolha uma foto da galeria</label>.</p>
+        </div>
+
+        <div class="grid3">
+          <div class="field"><label class="lbl" for="aut">Número do auto</label><input id="aut" inputmode="numeric" autocomplete="off" placeholder="102030"></div>
+          <div class="field"><label class="lbl" for="ano">Ano do auto</label><select id="ano"></select></div>
+          <div class="field"><label class="lbl" for="dt">Data da postagem</label><input id="dt" type="date"></div>
+        </div>
+
+        <fieldset class="field" style="border:0;margin:0;padding:0">
+          <legend class="lbl" style="margin-bottom:6px">Tipo de postagem</legend>
+          <div class="tipos">
+            <label class="tipo"><input type="radio" name="tipo" id="t-pi" value="INTERNA"><span><strong>Postagem interna</strong><em>Visível para a SRAI</em></span></label>
+            <label class="tipo"><input type="radio" name="tipo" id="t-cp" value="CIENTIFICACAO"><span><strong>Cientificação postal</strong><em>Visível também ao agente autuador</em></span></label>
+          </div>
+        </fieldset>
+
+        <div class="field" id="ag-wrap" hidden>
+          <label class="lbl" for="ag-npm">Nº PM do agente autuador</label>
+          <input id="ag-npm" inputmode="numeric" autocomplete="off" placeholder="000.000-0" maxlength="9" class="mono">
+          <p class="msg info" id="ag-info" role="status"></p>
+          <div class="grid2" id="ag-pre" hidden>
+            <div class="field"><label class="lbl" for="ag-nome">Nome completo do agente</label><input id="ag-nome" autocomplete="off" style="text-transform:uppercase"></div>
+            <div class="field"><label class="lbl" for="ag-posto">Posto ou graduação</label><select id="ag-posto"></select></div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="lbl" for="obs">Observação (opcional)</label>
+          <input id="obs" maxlength="120" autocomplete="off" placeholder="Segunda tentativa, endereço atualizado">
+        </div>
+
+        <p class="msg" id="pp-msg" role="status"></p>
+        <div class="actions">
+          <button type="button" class="btn" id="pp-outra">Salvar e cadastrar outra</button>
+          <button type="submit" class="btn primary" id="pp-salvar">Salvar</button>
+        </div>
+
+        <div id="pp-recentes-wrap" hidden>
+          <h3>Cadastradas agora</h3>
+          <ul class="lista" id="pp-recentes" style="margin-top:8px"></ul>
+        </div>
+      </form>
+    </section>
+
+    <!-- Minhas cientificações -->
+    <section id="t-minhas" hidden>
+      <p class="note" style="margin-bottom:12px">Cientificações dos autos lavrados por você, de todas as SRAIs. As entregues que ainda faltam lançar no GAIA aparecem primeiro.</p>
+      <p class="msg info" id="m-msg" role="status"></p>
+      <ul class="lista" id="m-lista"></ul>
+    </section>
+
+    <!-- Meu cadastro -->
+    <section id="t-meu" hidden>
+      <form class="card estreito" id="f-meu" novalidate>
+        <h2>Meu cadastro</h2>
+        <div class="field"><label class="lbl" for="u-nome">Nome completo</label><input id="u-nome" autocomplete="off" style="text-transform:uppercase"></div>
+        <div class="grid2">
+          <div class="field"><label class="lbl" for="u-posto">Posto ou graduação</label><select id="u-posto"></select></div>
+          <div class="field"><label class="lbl" for="u-npm">Nº PM</label><input id="u-npm" readonly class="mono"></div>
+        </div>
+        <label class="check"><input type="checkbox" id="u-aviso"> <span>Receber por e-mail o aviso de entrega das cientificações</span></label>
+        <p class="note" id="u-email-status"></p>
+        <p class="msg" id="u-msg" role="status"></p>
+        <div class="actions"><button type="submit" class="btn primary" id="u-btn">Salvar alterações</button></div>
+      </form>
+
+      <form class="card estreito" id="f-email" novalidate style="margin-top:16px">
+        <h3 id="em-titulo">Cadastrar e-mail</h3>
+        <div class="field"><label class="lbl" for="em-email">E-mail</label><input id="em-email" type="email" autocomplete="email" placeholder="seu.email@exemplo.com"></div>
+        <div class="field" id="em-cod-wrap" hidden><label class="lbl" for="em-cod">Código recebido</label><input id="em-cod" inputmode="numeric" maxlength="6" class="mono" placeholder="000000"></div>
+        <p class="msg" id="em-msg" role="status"></p>
+        <div class="actions">
+          <button type="button" class="btn" id="em-enviar">Enviar código</button>
+          <button type="submit" class="btn primary" id="em-confirmar" hidden>Confirmar</button>
+        </div>
+      </form>
+    </section>
+  </section>
+</main>
+
+<footer><div class="wrap">Sala de Apoio Virtual · BPM MAMB</div></footer>
+<div id="toast" role="status" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
+<script>
+/* ===== Ajuste: URL da implantação do Apps Script (termina em /exec) ===== */
+const API_URL = 'COLE_AQUI_A_URL_DO_APPS_SCRIPT';
+const INATIVIDADE_MIN = 15;
+
+const POSTOS = ['Sd','Cb','3º Sgt','2º Sgt','1º Sgt','Subten','Cad','Asp','2º Ten','1º Ten','Cap','Maj','Ten Cel','Cel'];
+const RE_NPM = /^\d{3}\.\d{3}-\d$/;
+const RE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const S10 = /^[A-Z]{2}\d{9}[A-Z]{2}$/;
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const S = { token: '', usuario: null, srai: '', postagens: null, minhas: null, filtroCard: '', aba: '', voltarPara: '' };
+
+/* ===== Utilidades ===== */
+function soDigitos(v) { return String(v || '').replace(/\D/g, ''); }
+function mascara(el, padrao) {
+  const max = padrao.replace(/[^0]/g, '').length;
+  el.addEventListener('input', () => {
+    const d = soDigitos(el.value).slice(0, max);
+    let out = '', i = 0;
+    for (const ch of padrao) { if (i >= d.length) break; if (ch === '0') out += d[i++]; else out += ch; }
+    el.value = out;
+  });
+}
+function cpfValido(c) {
+  c = soDigitos(c);
+  if (c.length !== 11 || /^(\d)\1{10}$/.test(c)) return false;
+  for (let t = 9; t < 11; t++) {
+    let s = 0;
+    for (let i = 0; i < t; i++) s += Number(c[i]) * (t + 1 - i);
+    if (((s * 10) % 11) % 10 !== Number(c[t])) return false;
+  }
+  return true;
+}
+function nomeValido(n) {
+  n = String(n || '').trim().replace(/\s+/g, ' ');
+  return n.length >= 5 && n.split(' ').length >= 2;
+}
+function dvS10(c) { const W = [8,6,4,2,3,5,9,7]; let s = 0; for (let i = 0; i < 8; i++) s += Number(c[2 + i]) * W[i]; let d = 11 - (s % 11); if (d === 10) d = 0; if (d === 11) d = 5; return d; }
+function setMsg(el, cls, txt) { el.className = 'msg ' + (cls || ''); el.textContent = txt || ''; }
+function preencherPostos(sel, comVazio) {
+  sel.innerHTML = (comVazio ? '<option value="">Escolha</option>' : '') + POSTOS.map(p => '<option>' + esc(p) + '</option>').join('');
+}
+let toastTimer = null;
+function toast(txt) {
+  const t = $('toast'); t.textContent = txt; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 4000);
+}
+async function ocupado(btn, fn) {
+  const txt = btn.innerHTML; btn.disabled = true; btn.textContent = 'Aguarde…';
+  try { return await fn(); } finally { btn.disabled = false; btn.innerHTML = txt; }
+}
+function hojeISO() { const d = new Date(), p = n => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); }
+function copiar(txt) {
+  const fallback = () => { const i = document.createElement('input'); i.value = txt; document.body.appendChild(i); i.select(); try { document.execCommand('copy'); toast('Data copiada: ' + txt); } catch (e) { toast('Copie manualmente: ' + txt); } i.remove(); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(() => toast('Data copiada: ' + txt)).catch(fallback);
+  else fallback();
+}
+function baixarBase64(nome, mime, b64) {
+  const bin = atob(b64), u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  const url = URL.createObjectURL(new Blob([u8], { type: mime || 'application/pdf' }));
+  const a = document.createElement('a'); a.href = url; a.download = nome || 'comprovante.pdf';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+/* ===== API ===== */
+async function api(acao, dados) {
+  if (API_URL.indexOf('https://') !== 0) throw new Error('O painel ainda não foi ligado ao servidor (API_URL).');
+  let resp;
+  try {
+    resp = await fetch(API_URL, { method: 'POST', body: JSON.stringify(Object.assign({ acao, token: S.token }, dados || {})) });
+  } catch (e) { throw new Error('Sem conexão com o servidor. Confira a internet e tente de novo.'); }
+  let j;
+  try { j = await resp.json(); } catch (e) { throw new Error('O servidor respondeu de um jeito inesperado. Tente de novo.'); }
+  if (!j.ok) {
+    if (j.erro === 'SESSAO_EXPIRADA' && S.token) encerrar(j.msg);
+    const e = new Error(j.msg || 'Não foi possível concluir.'); e.codigo = j.erro; throw e;
+  }
+  return j;
+}
+
+/* ===== Sessão ===== */
+function salvarSessao() { try { sessionStorage.setItem('ccp', JSON.stringify({ token: S.token, usuario: S.usuario, srai: S.srai })); } catch (e) {} }
+function lerSessao() {
+  try { const d = JSON.parse(sessionStorage.getItem('ccp') || 'null'); if (d && d.token && d.usuario) { S.token = d.token; S.usuario = d.usuario; S.srai = d.srai || ''; return true; } } catch (e) {}
+  return false;
+}
+function encerrar(msg) {
+  stopLive();
+  if (S.token) { const t = S.token; S.token = ''; fetch(API_URL, { method: 'POST', body: JSON.stringify({ acao: 'sair', token: t }) }).catch(() => {}); }
+  Object.assign(S, { token: '', usuario: null, srai: '', postagens: null, minhas: null, filtroCard: '', aba: '' });
+  try { sessionStorage.removeItem('ccp'); } catch (e) {}
+  $('quem').hidden = true;
+  $('e-cpf').value = '';
+  mostrar('v-entrada');
+  setMsg($('e-msg'), msg ? 'warn' : '', msg || '');
+}
+let ultimoUso = Date.now();
+['click', 'keydown', 'touchstart', 'scroll'].forEach(ev => addEventListener(ev, () => { ultimoUso = Date.now(); }, { passive: true }));
+setInterval(() => { if (S.token && Date.now() - ultimoUso > INATIVIDADE_MIN * 60000) encerrar('Sessão encerrada depois de ' + INATIVIDADE_MIN + ' minutos sem uso.'); }, 30000);
+
+function mostrar(view) {
+  ['v-entrada', 'v-cadastro', 'v-codigo', 'v-app'].forEach(v => { $(v).hidden = v !== view; });
+  scrollTo(0, 0);
+}
+
+/* ===== Entrada ===== */
+mascara($('e-cpf'), '000.000.000-00');
+$('f-entrada').addEventListener('submit', e => {
+  e.preventDefault();
+  const cpf = $('e-cpf').value;
+  if (!cpfValido(cpf)) { setMsg($('e-msg'), 'bad', 'CPF inválido. Confira os números.'); return; }
+  ocupado($('e-btn'), async () => {
+    try {
+      const r = await api('login', { cpf });
+      S.token = r.token; S.usuario = r.usuario;
+      setMsg($('e-msg'), '', '');
+      iniciarApp();
+    } catch (err) {
+      setMsg($('e-msg'), 'bad', err.message);
+      if (err.codigo === 'CPF_NAO_ENCONTRADO') { $('c-cpf').value = $('e-cpf').value; }
+    }
+  });
+});
+$('irCadastro').addEventListener('click', () => { setMsg($('c-msg'), '', ''); mostrar('v-cadastro'); $('c-nome').focus(); });
+
+/* ===== Primeiro cadastro ===== */
+preencherPostos($('c-posto'), true);
+mascara($('c-npm'), '000.000-0');
+mascara($('c-cpf'), '000.000.000-00');
+mascara($('c-cpf2'), '000.000.000-00');
+$('c-cpf2').addEventListener('paste', e => { e.preventDefault(); setMsg($('c-msg'), 'warn', 'Digite o CPF de novo, sem colar.'); });
+$('c-aviso').addEventListener('change', () => { $('c-email-wrap').hidden = !$('c-aviso').checked; });
+$('c-voltar').addEventListener('click', () => mostrar('v-entrada'));
+$('f-cadastro').addEventListener('submit', e => {
+  e.preventDefault();
+  const d = {
+    nome: $('c-nome').value.trim().replace(/\s+/g, ' ').toUpperCase(),
+    posto: $('c-posto').value, npm: $('c-npm').value, cpf: $('c-cpf').value, cpf2: $('c-cpf2').value,
+    querAviso: $('c-aviso').checked, email: $('c-email').value.trim()
+  };
+  const m = $('c-msg');
+  if (!nomeValido(d.nome)) return setMsg(m, 'bad', 'Informe o nome completo, com nome e sobrenome.');
+  if (!d.posto) return setMsg(m, 'bad', 'Escolha o posto ou graduação.');
+  if (!RE_NPM.test(d.npm)) return setMsg(m, 'bad', 'Informe o Nº PM completo, no formato 000.000-0.');
+  if (!cpfValido(d.cpf)) return setMsg(m, 'bad', 'CPF inválido. Confira os números.');
+  if (soDigitos(d.cpf) !== soDigitos(d.cpf2)) return setMsg(m, 'bad', 'Os dois CPFs digitados não são iguais.');
+  if (d.querAviso && !RE_EMAIL.test(d.email)) return setMsg(m, 'bad', 'Confira o e-mail informado.');
+  ocupado($('c-btn'), async () => {
+    try {
+      const r = await api('cadastrar', d);
+      S.token = r.token; S.usuario = r.usuario;
+      ['c-nome', 'c-npm', 'c-cpf', 'c-cpf2', 'c-email'].forEach(id => { $(id).value = ''; });
+      if (r.codigoEnviado) { abrirCodigo(r.email, ''); }
+      else { iniciarApp(); if (r.avisoEmail) toast(r.avisoEmail); else toast('Cadastro feito. Bem-vindo!'); }
+    } catch (err) { setMsg(m, 'bad', err.message); }
+  });
+});
+
+/* ===== Confirmação de e-mail (após o cadastro) ===== */
+function abrirCodigo(email, voltarPara) {
+  S.voltarPara = voltarPara || '';
+  $('k-email').textContent = email; $('k-codigo').value = ''; setMsg($('k-msg'), '', '');
+  mostrar('v-codigo'); $('k-codigo').focus();
+}
+$('k-depois').addEventListener('click', () => { iniciarApp(); toast('Você pode confirmar o e-mail depois, em "Meu cadastro".'); });
+$('f-codigo').addEventListener('submit', e => {
+  e.preventDefault();
+  const codigo = soDigitos($('k-codigo').value);
+  if (codigo.length !== 6) return setMsg($('k-msg'), 'bad', 'O código tem 6 dígitos.');
+  ocupado($('k-btn'), async () => {
+    try { const r = await api('confirmarEmail', { codigo }); S.usuario = r.usuario; iniciarApp(); toast('E-mail confirmado. O aviso de entrega está ligado.'); }
+    catch (err) { setMsg($('k-msg'), 'bad', err.message); }
+  });
+});
+
+/* ===== Painel ===== */
+function ehOperador() { return !!(S.usuario && S.usuario.srais && S.usuario.srais.length); }
+function iniciarApp() {
+  salvarSessao();
+  $('quemNome').textContent = S.usuario.exibicao;
+  $('quem').hidden = false;
+  const abas = [];
+  if (ehOperador()) {
+    abas.push(['postagens', 'Postagens da SRAI'], ['cadastrar', 'Cadastrar postagem']);
+    const sel = $('sraiSel');
+    sel.innerHTML = S.usuario.srais.map(s => '<option value="' + esc(s.id) + '">' + esc(s.nome) + (s.companhia ? ' · ' + esc(s.companhia) : '') + '</option>').join('');
+    if (!S.usuario.srais.some(s => s.id === S.srai)) S.srai = S.usuario.srais[0].id;
+    sel.value = S.srai;
+  }
+  abas.push(['minhas', 'Minhas cientificações'], ['meu', 'Meu cadastro']);
+  $('tabs').innerHTML = abas.map(a => '<button type="button" class="tab" role="tab" data-aba="' + a[0] + '" aria-selected="false">' + esc(a[1]) + '</button>').join('');
+  mostrar('v-app');
+  abrirAba(S.aba && abas.some(a => a[0] === S.aba) ? S.aba : abas[0][0]);
+}
+$('tabs').addEventListener('click', e => { const b = e.target.closest('[data-aba]'); if (b) abrirAba(b.dataset.aba); });
+$('sraiSel').addEventListener('change', () => {
+  S.srai = $('sraiSel').value; S.postagens = null; salvarSessao();
+  if (S.aba === 'postagens') carregarPostagens();
+  $('pp-srai').textContent = nomeSrai();
+});
+$('btnSair').addEventListener('click', () => encerrar(''));
+
+function nomeSrai() { const s = (S.usuario.srais || []).find(x => x.id === S.srai); return s ? s.nome : ''; }
+
+function abrirAba(aba) {
+  if (S.aba === 'cadastrar' && aba !== 'cadastrar') stopLive();
+  S.aba = aba;
+  document.querySelectorAll('#tabs .tab').forEach(t => t.setAttribute('aria-selected', String(t.dataset.aba === aba)));
+  ['postagens', 'cadastrar', 'minhas', 'meu'].forEach(a => { $('t-' + a).hidden = a !== aba; });
+  $('sraibar').hidden = !(ehOperador() && (aba === 'postagens' || aba === 'cadastrar') && S.usuario.srais.length > 1);
+  if (aba === 'postagens') { if (!S.postagens) carregarPostagens(); else renderPostagens(); }
+  if (aba === 'cadastrar') prepararCadastro();
+  if (aba === 'minhas') carregarMinhas();
+  if (aba === 'meu') preencherMeu();
+}
+
+/* ===== Status ===== */
+function classeStatus(p) {
+  if (p.situacao === 'CANCELADA') return 'cancel';
+  return ({ 'Entregue': 'ok', 'Devolvido': 'bad', 'Verificar manualmente': 'warn', 'Aguardando 1ª consulta': 'aguarda' })[p.status] || 'transito';
+}
+function rotuloStatus(p) { return p.situacao === 'CANCELADA' ? 'Cancelada' : p.status; }
+function grupo(p) {
+  if (p.situacao === 'CANCELADA') return 'canceladas';
+  if (p.status === 'Entregue') return 'entregues';
+  if (p.status === 'Devolvido') return 'devolvidas';
+  if (p.status === 'Verificar manualmente') return 'verificar';
+  return 'andamento';
+}
+function pendenteGaia(p) { return p.tipo === 'CIENTIFICACAO' && p.status === 'Entregue' && !p.lancadoGaia && p.situacao !== 'CANCELADA'; }
+
+/* ===== Postagens da SRAI ===== */
+async function carregarPostagens() {
+  setMsg($('p-msg'), 'info', 'Carregando postagens…');
+  $('p-lista').innerHTML = '';
+  try {
+    const r = await api('listarPostagens', { sraiId: S.srai });
+    S.postagens = r.postagens.sort((a, b) => b.id.localeCompare(a.id));
+    const anos = Array.from(new Set(S.postagens.map(p => p.anoAuto))).sort().reverse();
+    const fa = $('fAno'), atual = fa.value;
+    fa.innerHTML = '<option value="">Todos os anos</option>' + anos.map(a => '<option>' + esc(a) + '</option>').join('');
+    fa.value = anos.indexOf(atual) >= 0 ? atual : '';
+    renderPostagens();
+  } catch (err) { setMsg($('p-msg'), 'bad', err.message); }
+}
+const CARDS = [['andamento', 'Em andamento'], ['entregues', 'Entregues'], ['devolvidas', 'Devolvidas'], ['verificar', 'Verificar manualmente'], ['gaia', 'Pendentes no GAIA']];
+function renderPostagens() {
+  const todas = S.postagens || [];
+  const conta = { andamento: 0, entregues: 0, devolvidas: 0, verificar: 0, gaia: 0 };
+  todas.forEach(p => { const g = grupo(p); if (conta[g] !== undefined) conta[g]++; if (pendenteGaia(p)) conta.gaia++; });
+  $('counters').innerHTML = CARDS.map(c => '<button type="button" class="counter' + (c[0] === 'gaia' ? ' gaia' : '') + '" data-card="' + c[0] + '" aria-pressed="' + (S.filtroCard === c[0]) + '"><b>' + conta[c[0]] + '</b><span>' + esc(c[1]) + '</span></button>').join('');
+
+  const busca = $('busca').value.trim().toUpperCase().replace(/\s/g, '');
+  const tipo = $('fTipo').value, ano = $('fAno').value, canceladas = $('fCanceladas').checked;
+  const lista = todas.filter(p => {
+    if (!canceladas && p.situacao === 'CANCELADA') return false;
+    if (S.filtroCard === 'gaia' ? !pendenteGaia(p) : (S.filtroCard && grupo(p) !== S.filtroCard)) return false;
+    if (tipo && p.tipo !== tipo) return false;
+    if (ano && p.anoAuto !== ano) return false;
+    if (busca && p.codigo.indexOf(busca) < 0 && p.numAuto.indexOf(soDigitos(busca) || '#') < 0) return false;
+    return true;
+  });
+  setMsg($('p-msg'), 'info', todas.length ? lista.length + ' de ' + todas.length + ' postagens' : '');
+  if (!todas.length) {
+    $('p-lista').innerHTML = '<li class="vazio">Nenhuma postagem desta SRAI ainda. Use "Cadastrar postagem" para incluir a primeira.</li>';
+    return;
+  }
+  $('p-lista').innerHTML = lista.length ? lista.map(itemPostagem).join('') : '<li class="vazio">Nenhuma postagem com esses filtros.</li>';
+}
+function itemPostagem(p) {
+  const tipo = p.tipo === 'CIENTIFICACAO' ? 'Cientificação' : 'Interna';
+  const linha1 = 'Auto <strong>' + esc(p.numAuto) + '/' + esc(p.anoAuto) + '</strong> · ' + tipo + (p.agenteNome ? ' · ' + esc(p.agenteNome) : '');
+  const partes = ['Postada em ' + esc(p.dataPostagem)];
+  if (p.dataEntrega) partes.push((p.status === 'Devolvido' ? 'Devolvida em ' : 'Entregue em ') + '<strong>' + esc(p.dataEntrega) + '</strong>');
+  else if (p.ultimaConsulta) partes.push('Última consulta ' + esc(p.ultimaConsulta.slice(0, 16)));
+  if (p.tipo === 'CIENTIFICACAO' && p.dataEntrega && p.status === 'Entregue') partes.push(p.lancadoGaia ? 'Lançado no GAIA' : '<strong>Falta lançar no GAIA</strong>');
+  const acts = [];
+  if (p.temArquivo) acts.push('<button type="button" class="btn small" data-act="baixar" data-id="' + esc(p.id) + '">Baixar comprovante</button>');
+  if (p.situacao === 'ABERTA') acts.push('<button type="button" class="btn small" data-act="cancelar" data-id="' + esc(p.id) + '">Cancelar</button>');
+  return '<li class="item' + (pendenteGaia(p) ? ' destaque' : '') + '"><div class="item-top"><span class="cod">' + esc(p.codigo) + '</span><span class="chip ' + classeStatus(p) + '">' + esc(rotuloStatus(p)) + '</span></div>' +
+    '<div class="meta">' + linha1 + '</div><div class="meta">' + partes.join(' · ') + '</div>' +
+    (p.obs ? '<div class="meta">Obs.: ' + esc(p.obs) + '</div>' : '') +
+    (acts.length ? '<div class="item-acts">' + acts.join('') + '</div>' : '') + '</li>';
+}
+$('counters').addEventListener('click', e => { const b = e.target.closest('[data-card]'); if (!b) return; S.filtroCard = S.filtroCard === b.dataset.card ? '' : b.dataset.card; renderPostagens(); });
+['busca', 'fTipo', 'fAno', 'fCanceladas'].forEach(id => $(id).addEventListener('input', renderPostagens));
+$('recarregar').addEventListener('click', carregarPostagens);
+$('p-lista').addEventListener('click', e => acaoItem(e, S.postagens));
+$('m-lista').addEventListener('click', e => acaoItem(e, S.minhas));
+
+async function acaoItem(e, lista) {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const p = (lista || []).find(x => x.id === b.dataset.id); if (!p) return;
+  const act = b.dataset.act;
+  if (act === 'baixar') {
+    ocupado(b, async () => {
+      try { const r = await api('baixarComprovante', { id: p.id }); baixarBase64(r.nome, r.mime, r.base64); }
+      catch (err) { toast(err.message); }
+    });
+  } else if (act === 'copiar') {
+    copiar(p.dataEntrega);
+  } else if (act === 'cancelar') {
+    if (!confirm('Cancelar a postagem ' + p.codigo + ' (auto ' + p.numAuto + '/' + p.anoAuto + ')?\nEla sai da fila do robô e não pode ser reaberta.')) return;
+    const motivo = prompt('Motivo do cancelamento (opcional):', '') || '';
+    ocupado(b, async () => {
+      try { await api('cancelarPostagem', { id: p.id, motivo }); p.situacao = 'CANCELADA'; renderPostagens(); toast('Postagem cancelada.'); }
+      catch (err) { toast(err.message); }
+    });
+  } else if (act === 'lancado' || act === 'desfazer') {
+    const valor = act === 'lancado';
+    ocupado(b, async () => {
+      try {
+        const r = await api('marcarLancado', { id: p.id, valor });
+        p.lancadoGaia = r.lancadoGaia; p.lancadoGaiaEm = r.lancadoGaiaEm;
+        renderMinhas(); toast(valor ? 'Marcado como lançado no GAIA.' : 'Marcação desfeita.');
+        if (S.postagens) { const q = S.postagens.find(x => x.id === p.id); if (q) { q.lancadoGaia = p.lancadoGaia; q.lancadoGaiaEm = p.lancadoGaiaEm; } }
+      } catch (err) { toast(err.message); }
+    });
+  }
+}
+
+/* ===== Minhas cientificações ===== */
+async function carregarMinhas() {
+  setMsg($('m-msg'), 'info', 'Carregando…');
+  try { const r = await api('minhasCientificacoes', {}); S.minhas = r.postagens; renderMinhas(); }
+  catch (err) { setMsg($('m-msg'), 'bad', err.message); }
+}
+function renderMinhas() {
+  const lista = (S.minhas || []).slice().sort((a, b) => (pendenteGaia(b) - pendenteGaia(a)) || b.id.localeCompare(a.id));
+  const pend = lista.filter(pendenteGaia).length;
+  setMsg($('m-msg'), pend ? 'warn' : 'info', lista.length ? (pend ? pend + (pend === 1 ? ' entrega falta' : ' entregas faltam') + ' lançar no GAIA.' : 'Nada pendente de lançamento no GAIA.') : '');
+  if (!lista.length) { $('m-lista').innerHTML = '<li class="vazio">Nenhuma cientificação no seu Nº PM por enquanto. Quando uma SRAI cadastrar a cientificação de um auto seu, ela aparece aqui.</li>'; return; }
+  $('m-lista').innerHTML = lista.map(p => {
+    const acts = [];
+    if (p.dataEntrega) acts.push('<button type="button" class="btn small" data-act="copiar" data-id="' + esc(p.id) + '">Copiar data</button>');
+    if (p.temArquivo) acts.push('<button type="button" class="btn small" data-act="baixar" data-id="' + esc(p.id) + '">Baixar comprovante</button>');
+    if (p.status === 'Entregue' && p.dataEntrega) {
+      acts.push(p.lancadoGaia
+        ? '<button type="button" class="btn small" data-act="desfazer" data-id="' + esc(p.id) + '">Desfazer lançamento</button>'
+        : '<button type="button" class="btn small primary" data-act="lancado" data-id="' + esc(p.id) + '">Marcar como lançado no GAIA</button>');
+    }
+    const entrega = p.dataEntrega ? (p.status === 'Devolvido' ? 'Devolvida em ' : 'Entregue em ') + '<strong>' + esc(p.dataEntrega) + '</strong>' : 'Postada em ' + esc(p.dataPostagem);
+    const gaia = p.lancadoGaia ? ' · Lançado no GAIA em ' + esc(String(p.lancadoGaiaEm).slice(0, 10)) : '';
+    return '<li class="item' + (pendenteGaia(p) ? ' destaque' : '') + '"><div class="item-top"><span>Auto <strong>' + esc(p.numAuto) + '/' + esc(p.anoAuto) + '</strong></span><span class="chip ' + classeStatus(p) + '">' + esc(rotuloStatus(p)) + '</span></div>' +
+      '<div class="meta">' + entrega + gaia + '</div><div class="meta"><span class="mono">' + esc(p.codigo) + '</span> · ' + esc(p.sraiNome) + '</div>' +
+      (acts.length ? '<div class="item-acts">' + acts.join('') + '</div>' : '') + '</li>';
+  }).join('');
+}
+
+/* ===== Meu cadastro ===== */
+preencherPostos($('u-posto'), false);
+function preencherMeu() {
+  const u = S.usuario;
+  $('u-nome').value = u.nome; $('u-posto').value = u.posto || POSTOS[0]; $('u-npm').value = u.npm;
+  $('u-aviso').checked = !!u.avisoAtivo; $('u-aviso').disabled = !u.email;
+  $('u-email-status').textContent = u.email ? 'E-mail confirmado: ' + u.email : 'Para ligar o aviso, cadastre e confirme um e-mail logo abaixo.';
+  $('em-titulo').textContent = u.email ? 'Trocar e-mail' : 'Cadastrar e-mail';
+  $('em-email').value = ''; $('em-cod').value = ''; $('em-cod-wrap').hidden = true; $('em-confirmar').hidden = true;
+  setMsg($('u-msg'), '', ''); setMsg($('em-msg'), '', '');
+}
+$('f-meu').addEventListener('submit', e => {
+  e.preventDefault();
+  const nome = $('u-nome').value.trim().replace(/\s+/g, ' ').toUpperCase();
+  if (!nomeValido(nome)) return setMsg($('u-msg'), 'bad', 'Informe o nome completo, com nome e sobrenome.');
+  ocupado($('u-btn'), async () => {
+    try {
+      const r = await api('atualizarCadastro', { nome, posto: $('u-posto').value, avisoAtivo: $('u-aviso').checked });
+      S.usuario = r.usuario; salvarSessao(); $('quemNome').textContent = S.usuario.exibicao;
+      preencherMeu(); setMsg($('u-msg'), 'ok', 'Alterações salvas.');
+    } catch (err) { setMsg($('u-msg'), 'bad', err.message); }
+  });
+});
+$('em-enviar').addEventListener('click', () => {
+  const email = $('em-email').value.trim();
+  if (!RE_EMAIL.test(email)) return setMsg($('em-msg'), 'bad', 'Confira o e-mail informado.');
+  ocupado($('em-enviar'), async () => {
+    try {
+      await api('enviarCodigoEmail', { email });
+      $('em-cod-wrap').hidden = false; $('em-confirmar').hidden = false; $('em-cod').focus();
+      setMsg($('em-msg'), 'info', 'Código enviado para ' + email + '. Ele vale por 10 minutos.');
+    } catch (err) { setMsg($('em-msg'), 'bad', err.message); }
+  });
+});
+$('f-email').addEventListener('submit', e => {
+  e.preventDefault();
+  const codigo = soDigitos($('em-cod').value);
+  if (codigo.length !== 6) return setMsg($('em-msg'), 'bad', 'O código tem 6 dígitos.');
+  ocupado($('em-confirmar'), async () => {
+    try { const r = await api('confirmarEmail', { codigo }); S.usuario = r.usuario; salvarSessao(); preencherMeu(); setMsg($('u-msg'), 'ok', 'E-mail confirmado. O aviso de entrega está ligado.'); }
+    catch (err) { setMsg($('em-msg'), 'bad', err.message); }
+  });
+});
+
+/* ===== Cadastrar postagem ===== */
+preencherPostos($('ag-posto'), true);
+mascara($('ag-npm'), '000.000-0');
+const recentes = [];
+function prepararCadastro() {
+  $('pp-srai').textContent = nomeSrai();
+  const ano = new Date().getFullYear(), sel = $('ano'), atual = sel.value;
+  sel.innerHTML = [0, 1, 2, 3, 4].map(i => '<option>' + (ano - i) + '</option>').join('');
+  if (atual) sel.value = atual;
+  if (!$('dt').value) $('dt').value = hojeISO();
+  $('dt').max = hojeISO();
+  if (!S.postagens) api('listarPostagens', { sraiId: S.srai }).then(r => { S.postagens = r.postagens.sort((a, b) => b.id.localeCompare(a.id)); }).catch(() => {});
+  setTimeout(() => $('cod').focus(), 50);
+}
+function checarCodigo() {
+  const c = $('cod').value, el = $('cst');
+  if (!c) { setMsg(el, 'info', 'Bipe a etiqueta, use a câmera ou digite o código.'); return null; }
+  if (!S10.test(c)) { setMsg(el, c.length >= 13 ? 'bad' : 'info', c.length >= 13 ? 'Formato esperado: 2 letras, 9 números e 2 letras.' : 'Continue digitando…'); return c.length >= 13 ? 'bad' : null; }
+  if (dvS10(c) !== Number(c[10])) { setMsg(el, 'bad', 'Dígito verificador não confere. Confira a etiqueta.'); return 'bad'; }
+  const dup = (S.postagens || []).find(p => p.codigo === c && p.situacao !== 'CANCELADA');
+  if (dup) { setMsg(el, 'bad', 'Código já cadastrado nesta SRAI (auto ' + dup.numAuto + '/' + dup.anoAuto + ').'); return 'bad'; }
+  if (!c.endsWith('BR')) { setMsg(el, 'warn', 'Código válido, mas não termina em BR. Confira se é postagem nacional.'); return 'ok'; }
+  setMsg(el, 'ok', 'Código válido.'); return 'ok';
+}
+$('cod').addEventListener('input', e => { e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 13); checarCodigo(); setMsg($('pp-msg'), '', ''); });
+$('cod').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('aut').focus(); } });
+$('aut').addEventListener('input', e => { e.target.value = soDigitos(e.target.value); });
+$('aut').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); salvarPostagem(true, $('pp-outra')); } });
+function tipoSel() { return $('t-cp').checked ? 'CIENTIFICACAO' : $('t-pi').checked ? 'INTERNA' : ''; }
+function mudouTipo() { $('ag-wrap').hidden = tipoSel() !== 'CIENTIFICACAO'; }
+$('t-pi').addEventListener('change', mudouTipo); $('t-cp').addEventListener('change', mudouTipo);
+let agBusca = 0, agEncontrado = null;
+$('ag-npm').addEventListener('input', async () => {
+  const npm = $('ag-npm').value; const meu = ++agBusca; agEncontrado = null;
+  $('ag-pre').hidden = true;
+  if (!RE_NPM.test(npm)) { setMsg($('ag-info'), 'info', npm ? 'Continue digitando o Nº PM…' : ''); return; }
+  setMsg($('ag-info'), 'info', 'Procurando…');
+  try {
+    const r = await api('buscarMilitar', { npm });
+    if (meu !== agBusca) return;
+    agEncontrado = r.encontrado;
+    if (r.encontrado) setMsg($('ag-info'), 'ok', r.nome);
+    else { setMsg($('ag-info'), 'warn', 'Este agente ainda não tem cadastro. Informe o nome e o posto dele.'); $('ag-pre').hidden = false; }
+  } catch (err) { if (meu === agBusca) setMsg($('ag-info'), 'bad', err.message); }
+});
+async function salvarPostagem(manter, btn) {
+  const m = $('pp-msg');
+  const estado = checarCodigo();
+  if (estado !== 'ok') { setMsg(m, 'bad', $('cod').value ? 'Corrija o código de rastreio.' : 'Informe o código de rastreio.'); return; }
+  if (!$('aut').value) return setMsg(m, 'bad', 'Informe o número do auto.');
+  const tipo = tipoSel(); if (!tipo) return setMsg(m, 'bad', 'Escolha o tipo de postagem.');
+  if (!$('dt').value) return setMsg(m, 'bad', 'Informe a data da postagem.');
+  const d = { sraiId: S.srai, codigo: $('cod').value, numAuto: $('aut').value, anoAuto: $('ano').value, dataPostagem: $('dt').value, tipo, obs: $('obs').value.trim() };
+  if (tipo === 'CIENTIFICACAO') {
+    d.agenteNpm = $('ag-npm').value;
+    if (!RE_NPM.test(d.agenteNpm)) return setMsg(m, 'bad', 'Informe o Nº PM do agente no formato 000.000-0.');
+    if (agEncontrado === false) {
+      d.agenteNome = $('ag-nome').value.trim().replace(/\s+/g, ' ').toUpperCase(); d.agentePosto = $('ag-posto').value;
+      if (!nomeValido(d.agenteNome)) return setMsg(m, 'bad', 'Informe o nome completo do agente.');
+    }
+  }
+  await ocupado(btn, async () => {
+    try {
+      const r = await api('cadastrarPostagem', d);
+      recentes.unshift({ codigo: d.codigo, txt: 'Auto ' + d.numAuto + '/' + d.anoAuto + ' · ' + (tipo === 'CIENTIFICACAO' ? 'Cientificação' : 'Interna') });
+      $('pp-recentes').innerHTML = recentes.slice(0, 10).map(x => '<li class="item"><div class="item-top"><span class="cod">' + esc(x.codigo) + '</span><span class="chip aguarda">Aguardando 1ª consulta</span></div><div class="meta">' + esc(x.txt) + '</div></li>').join('');
+      $('pp-recentes-wrap').hidden = false;
+      if (S.postagens) S.postagens = null;
+      setMsg(m, r.aviso ? 'warn' : 'ok', 'Postagem salva (' + r.id + ').' + (r.preCadastro ? ' O agente ficou pré-cadastrado.' : '') + (r.aviso ? ' ' + r.aviso : ''));
+      $('cod').value = ''; $('aut').value = ''; $('obs').value = ''; checarCodigo();
+      if (!manter) {
+        $('t-pi').checked = false; $('t-cp').checked = false; mudouTipo();
+        $('ag-npm').value = ''; $('ag-nome').value = ''; $('ag-pre').hidden = true; setMsg($('ag-info'), '', ''); agEncontrado = null;
+      }
+      $('cod').focus();
+      api('listarPostagens', { sraiId: S.srai }).then(x => { S.postagens = x.postagens.sort((a, b) => b.id.localeCompare(a.id)); }).catch(() => {});
+    } catch (err) { setMsg(m, 'bad', err.message); }
+  });
+}
+$('f-postagem').addEventListener('submit', e => { e.preventDefault(); salvarPostagem(false, $('pp-salvar')); });
+$('pp-outra').addEventListener('click', () => salvarPostagem(true, $('pp-outra')));
+
+/* ===== Leitura do código de barras ===== */
+let HINTS = null, HINTS_RAPIDO = null;
+function leitorPronto() {
+  if (!window.ZXing) return false;
+  if (!HINTS) {
+    HINTS = new Map(); HINTS.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.CODE_128]); HINTS.set(ZXing.DecodeHintType.TRY_HARDER, true);
+    HINTS_RAPIDO = new Map(); HINTS_RAPIDO.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.CODE_128]);
+  }
+  return true;
+}
+function lerCanvas(cv, rapido) {
+  try {
+    const leitor = new ZXing.MultiFormatReader(); leitor.setHints(rapido ? HINTS_RAPIDO : HINTS);
+    return leitor.decode(new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(new ZXing.HTMLCanvasElementLuminanceSource(cv)))).getText();
+  } catch (e) { return null; }
+}
+function recorte(img, sx, sy, sw, sh, maxDim) {
+  const k = Math.min(1, maxDim / Math.max(sw, sh)), w = Math.max(1, Math.round(sw * k)), h = Math.max(1, Math.round(sh * k));
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  const ctx = cv.getContext('2d', { willReadFrequently: true }); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, h); ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+  return cv;
+}
+const normCod = t => String(t || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+async function lerImagem(img) {
+  const W = img.naturalWidth || img.width, H = img.naturalHeight || img.height, outros = [];
+  const areas = [[0, 0, W, H], [0, 0, W, H * .55], [0, H * .45, W, H * .55], [0, 0, W, H / 3], [0, H / 3, W, H / 3], [0, H * 2 / 3, W, H / 3]];
+  for (const maxDim of [1600, 1000]) {
+    for (const a of areas) {
+      const t = lerCanvas(recorte(img, a[0], a[1], a[2], a[3], maxDim));
+      if (t) { const c = normCod(t); if (S10.test(c)) return { codigo: c }; if (outros.indexOf(t) < 0) outros.push(t); }
+      await new Promise(r => setTimeout(r, 0));
+    }
+  }
+  return { codigo: null, outros };
+}
+function aplicarLido(c, origem) {
+  $('cod').value = c; const e = checarCodigo();
+  if (e === 'ok') setMsg($('cst'), 'ok', 'Código lido ' + origem + '.');
+  $('aut').focus();
+}
+async function tratarImagem(img) {
+  if (!leitorPronto()) return setMsg($('cst'), 'bad', 'O leitor não carregou. Confira a internet e recarregue a página.');
+  setMsg($('cst'), 'info', 'Lendo a etiqueta…');
+  const r = await lerImagem(img);
+  if (r.codigo) aplicarLido(r.codigo, 'da foto');
+  else if (r.outros.length) setMsg($('cst'), 'warn', 'Li um código de barras, mas não é o de rastreio. Fotografe de perto só o código de rastreio.');
+  else setMsg($('cst'), 'bad', 'Não encontrei código de barras na foto. Tire outra com a etiqueta bem iluminada e sem reflexo.');
+}
+function aoEscolherFoto(e) {
+  const f = e.target.files && e.target.files[0]; if (!f) return;
+  const url = URL.createObjectURL(f), img = new Image();
+  img.onload = async () => { await tratarImagem(img); URL.revokeObjectURL(url); e.target.value = ''; };
+  img.onerror = () => { setMsg($('cst'), 'bad', 'Não consegui abrir essa imagem. Tente outra foto.'); URL.revokeObjectURL(url); e.target.value = ''; };
+  img.src = url;
+}
+$('foto').addEventListener('change', aoEscolherFoto);
+$('foto2').addEventListener('change', aoEscolherFoto);
+
+const aoVivoOk = (() => { try { return window.top === window.self && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia); } catch (e) { return false; } })();
+let stream = null, timer = null, lendo = false, detector = null;
+$('camBtn').addEventListener('click', () => { if (aoVivoOk) iniciarCamera(); else $('foto').click(); });
+async function iniciarCamera() {
+  if (stream) return;
+  if (!leitorPronto() && !('BarcodeDetector' in window)) return setMsg($('cst'), 'bad', 'O leitor não carregou. Confira a internet e recarregue a página.');
+  try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false }); }
+  catch (e) {
+    stream = null;
+    return setMsg($('cst'), 'bad', e && e.name === 'NotAllowedError' ? 'A câmera foi bloqueada. Libere a câmera para este site nas configurações do navegador, ou escolha uma foto da galeria.' : 'Não consegui abrir a câmera. Escolha uma foto da galeria.');
+  }
+  const v = $('vid'); v.srcObject = stream; $('live').hidden = false; $('liveBar').hidden = false;
+  try { await v.play(); } catch (e) {}
+  setMsg($('cst'), 'info', 'Lendo… aponte para o código de barras do rastreio.');
+  if (!detector && 'BarcodeDetector' in window) { try { const f = await BarcodeDetector.getSupportedFormats(); if (f.indexOf('code_128') >= 0) detector = new BarcodeDetector({ formats: ['code_128'] }); } catch (e) {} }
+  timer = setInterval(lerQuadro, 250);
+}
+function stopLive() {
+  clearInterval(timer); timer = null;
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  const v = $('vid'); if (v) v.srcObject = null;
+  $('live').hidden = true; $('liveBar').hidden = true;
+}
+$('liveStop').addEventListener('click', () => { stopLive(); checarCodigo(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && stream) stopLive(); });
+async function lerQuadro() {
+  const v = $('vid'); if (lendo || !stream || !v.videoWidth) return; lendo = true;
+  try {
+    let textos = [];
+    if (detector) { try { textos = (await detector.detect(v)).map(x => x.rawValue); } catch (e) { textos = []; } }
+    else if (leitorPronto()) { const t = lerCanvas(recorte(v, 0, v.videoHeight * .2, v.videoWidth, v.videoHeight * .6, 1000), true); if (t) textos = [t]; }
+    for (const t of textos) {
+      const c = normCod(t);
+      if (S10.test(c)) { stopLive(); try { navigator.vibrate && navigator.vibrate(80); } catch (e) {} aplicarLido(c, 'pela câmera'); return; }
+    }
+    if (textos.length) setMsg($('cst'), 'warn', 'Esse código de barras não é o de rastreio. Aponte para o outro código da etiqueta.');
+  } finally { lendo = false; }
+}
+
+/* ===== Início ===== */
+if (lerSessao()) iniciarApp(); else mostrar('v-entrada');
+</script>
+</body>
+</html>
