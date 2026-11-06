@@ -106,6 +106,11 @@ ul.lista{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;g
 .tipo input:focus-visible+span{outline:2px solid var(--caqui);outline-offset:2px}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 #toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--band);color:var(--band-ink);padding:10px 18px;border-radius:8px;font-size:15px;max-width:calc(100% - 32px);z-index:20;box-shadow:0 4px 16px rgba(0,0,0,.2)}
+.aviso{background:var(--warn-soft);border:1px solid var(--warn);border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;font-size:15px}
+.seg{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.seg .btn[aria-pressed="true"]{background:var(--caqui-soft);border-color:var(--caqui);color:var(--caqui-ink)}
+.checks{display:flex;flex-direction:column;gap:8px}
+.funcoes{display:flex;flex-direction:column;gap:10px}
 footer{font-size:13px;color:var(--muted)}
 footer .wrap{padding-block:16px;border-top:1px solid var(--line)}
 @media (prefers-reduced-motion:no-preference){.btn,.counter,.tab,.tipo span{transition:background .15s,border-color .15s,color .15s}}
@@ -115,7 +120,7 @@ footer .wrap{padding-block:16px;border-top:1px solid var(--line)}
 
 <header class="band">
   <div class="wrap">
-    <img id="escudo" src="escudo.png" alt="" onerror="this.remove()">
+    <img id="escudo" src="escudo.png" alt="" onerror="if(!this.dataset.t){this.dataset.t='1';this.src='escudo.png.png'}else{this.remove()}">
     <div class="marca">
       <span class="eyebrow">Sala de Apoio Virtual · BPM MAMB</span>
       <h1>Controle de Cientificação Postal</h1>
@@ -174,6 +179,18 @@ footer .wrap{padding-block:16px;border-top:1px solid var(--line)}
           <input id="c-cpf2" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" maxlength="14">
         </div>
       </div>
+      <fieldset class="field" style="border:0;margin:0;padding:0">
+        <legend class="lbl" style="margin-bottom:6px">Função pretendida</legend>
+        <div class="tipos">
+          <label class="tipo"><input type="checkbox" id="c-f-agente"><span><strong>Agente autuador</strong><em>Acompanho as cientificações dos autos que eu lavro</em></span></label>
+          <label class="tipo"><input type="checkbox" id="c-f-analista"><span><strong>Analista de SRAI</strong><em>Cadastro e acompanho as postagens da SRAI</em></span></label>
+        </div>
+        <p class="note" style="margin-top:6px">Pode marcar as duas. O gestor valida antes de liberar o acesso.</p>
+      </fieldset>
+      <div class="field" id="c-srai-wrap" hidden>
+        <label class="lbl" for="c-srai">SRAI em que você trabalha</label>
+        <select id="c-srai"></select>
+      </div>
       <label class="check"><input type="checkbox" id="c-aviso"> <span>Quero receber por e-mail o aviso de entrega das cientificações dos meus autos</span></label>
       <div class="field" id="c-email-wrap" hidden>
         <label class="lbl" for="c-email">E-mail</label>
@@ -207,6 +224,7 @@ footer .wrap{padding-block:16px;border-top:1px solid var(--line)}
 
   <!-- Painel -->
   <section id="v-app" hidden>
+    <div class="aviso" id="pendente" role="status" hidden></div>
     <nav class="tabs" id="tabs" role="tablist"></nav>
 
     <div class="sraibar" id="sraibar" hidden>
@@ -304,6 +322,7 @@ footer .wrap{padding-block:16px;border-top:1px solid var(--line)}
     <section id="t-meu" hidden>
       <form class="card estreito" id="f-meu" novalidate>
         <h2>Meu cadastro</h2>
+        <p class="note" id="u-funcoes"></p>
         <div class="field"><label class="lbl" for="u-nome">Nome completo</label><input id="u-nome" autocomplete="off" style="text-transform:uppercase"></div>
         <div class="grid2">
           <div class="field"><label class="lbl" for="u-posto">Posto ou graduação</label><select id="u-posto"></select></div>
@@ -326,6 +345,67 @@ footer .wrap{padding-block:16px;border-top:1px solid var(--line)}
         </div>
       </form>
     </section>
+
+    <!-- Gestão (só gestor) -->
+    <section id="t-gestao" hidden>
+      <div class="seg" id="g-seg" role="group" aria-label="Gestão">
+        <button type="button" class="btn small" data-g="militares" aria-pressed="true">Militares</button>
+        <button type="button" class="btn small" data-g="srais" aria-pressed="false">SRAIs</button>
+      </div>
+      <p class="msg info" id="g-msg" role="status"></p>
+
+      <div id="g-militares">
+        <form class="card" id="f-gmil" novalidate hidden style="margin-bottom:16px;max-width:640px">
+          <h3 id="gm-titulo">Validar cadastro</h3>
+          <p class="note" id="gm-quem"></p>
+          <p class="note" id="gm-pediu"></p>
+          <fieldset class="field" style="border:0;margin:0;padding:0">
+            <legend class="lbl" style="margin-bottom:6px">Funções liberadas</legend>
+            <div class="funcoes">
+              <label class="check"><input type="checkbox" id="gm-agente"> <span><strong>Agente autuador</strong> · vê as cientificações dos autos dele</span></label>
+              <label class="check"><input type="checkbox" id="gm-analista"> <span><strong>Analista de SRAI</strong> · cadastra e acompanha as postagens da SRAI</span></label>
+              <label class="check"><input type="checkbox" id="gm-gestor"> <span><strong>Gestor</strong> · valida cadastros e cadastra SRAIs</span></label>
+            </div>
+          </fieldset>
+          <fieldset class="field" id="gm-srais-wrap" hidden style="border:0;margin:0;padding:0">
+            <legend class="lbl" style="margin-bottom:6px">SRAIs em que trabalha como analista</legend>
+            <div class="checks" id="gm-srais"></div>
+          </fieldset>
+          <label class="check"><input type="checkbox" id="gm-ativo"> <span>Acesso ativo</span></label>
+          <p class="msg" id="gm-msg" role="status"></p>
+          <div class="actions">
+            <button type="button" class="btn" id="gm-cancelar">Cancelar</button>
+            <button type="button" class="btn" id="gm-recusar">Recusar cadastro</button>
+            <button type="submit" class="btn primary" id="gm-salvar">Validar</button>
+          </div>
+        </form>
+        <div class="filtros">
+          <input type="search" id="gm-busca" placeholder="Buscar por nome ou Nº PM" autocomplete="off">
+          <label class="check" style="align-items:center"><input type="checkbox" id="gm-sopend"> <span>Só aguardando validação</span></label>
+          <button type="button" class="btn small" id="g-recarregar">Atualizar</button>
+        </div>
+        <p class="msg info" id="gm-info" role="status" style="margin-top:10px"></p>
+        <ul class="lista" id="gm-lista"></ul>
+      </div>
+
+      <div id="g-srais" hidden>
+        <form class="card" id="f-gsrai" novalidate hidden style="margin-bottom:16px;max-width:640px">
+          <h3 id="gs-titulo">Nova SRAI</h3>
+          <div class="grid2">
+            <div class="field"><label class="lbl" for="gs-nome">Nome</label><input id="gs-nome" maxlength="60" autocomplete="off" placeholder="SRAI Poços de Caldas"></div>
+            <div class="field"><label class="lbl" for="gs-cia">Companhia</label><input id="gs-cia" maxlength="40" autocomplete="off" list="gs-cias" placeholder="5ª Companhia"><datalist id="gs-cias"></datalist></div>
+          </div>
+          <label class="check" id="gs-ativa-wrap"><input type="checkbox" id="gs-ativa"> <span>SRAI ativa</span></label>
+          <p class="msg" id="gs-msg" role="status"></p>
+          <div class="actions">
+            <button type="button" class="btn" id="gs-cancelar">Cancelar</button>
+            <button type="submit" class="btn primary" id="gs-salvar">Salvar</button>
+          </div>
+        </form>
+        <div class="actions" style="justify-content:flex-start"><button type="button" class="btn primary" id="gs-nova">Nova SRAI</button></div>
+        <ul class="lista" id="gs-lista" style="margin-top:12px"></ul>
+      </div>
+    </section>
   </section>
 </main>
 
@@ -345,6 +425,12 @@ const S10 = /^[A-Z]{2}\d{9}[A-Z]{2}$/;
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const S = { token: '', usuario: null, srai: '', postagens: null, minhas: null, filtroCard: '', aba: '', voltarPara: '' };
+const G = { dados: null, sub: 'militares', editNpm: '', editSrai: '' };
+const FUNCAO_NOME = { AGENTE: 'Agente autuador', OPERADOR: 'Analista de SRAI', GESTOR: 'Gestor' };
+const uniq = a => a.filter((x, i) => a.indexOf(x) === i);
+const semAcento = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+function temPerfil(p) { return !!(S.usuario && (S.usuario.perfis || []).indexOf(p) >= 0); }
+function rotFuncoes(lista) { return (lista || []).map(f => FUNCAO_NOME[f] || f).join(', '); }
 
 /* ===== Utilidades ===== */
 function soDigitos(v) { return String(v || '').replace(/\D/g, ''); }
@@ -426,6 +512,8 @@ function encerrar(msg) {
   stopLive();
   if (S.token) { const t = S.token; S.token = ''; fetch(API_URL, { method: 'POST', body: JSON.stringify({ acao: 'sair', token: t }) }).catch(() => {}); }
   Object.assign(S, { token: '', usuario: null, srai: '', postagens: null, minhas: null, filtroCard: '', aba: '' });
+  Object.assign(G, { dados: null, sub: 'militares', editNpm: '', editSrai: '' });
+  $('f-gmil').hidden = true; $('f-gsrai').hidden = true; $('pendente').hidden = true;
   try { sessionStorage.removeItem('ccp'); } catch (e) {}
   $('quem').hidden = true;
   $('e-cpf').value = '';
@@ -459,7 +547,19 @@ $('f-entrada').addEventListener('submit', e => {
     }
   });
 });
-$('irCadastro').addEventListener('click', () => { setMsg($('c-msg'), '', ''); mostrar('v-cadastro'); $('c-nome').focus(); });
+$('irCadastro').addEventListener('click', () => { setMsg($('c-msg'), '', ''); mostrar('v-cadastro'); carregarSraisCadastro(); $('c-nome').focus(); });
+
+let sraisCadastro = null;
+async function carregarSraisCadastro() {
+  if (sraisCadastro) return;
+  const sel = $('c-srai');
+  sel.innerHTML = '<option value="">Carregando…</option>';
+  try {
+    const r = await api('listarSrais', {});
+    sraisCadastro = r.srais;
+    sel.innerHTML = '<option value="">Escolha a SRAI</option>' + r.srais.map(s => '<option value="' + esc(s.id) + '">' + esc(s.nome) + (s.companhia ? ' · ' + esc(s.companhia) : '') + '</option>').join('');
+  } catch (err) { sel.innerHTML = '<option value="">Não consegui carregar as SRAIs</option>'; }
+}
 
 /* ===== Primeiro cadastro ===== */
 preencherPostos($('c-posto'), true);
@@ -468,13 +568,16 @@ mascara($('c-cpf'), '000.000.000-00');
 mascara($('c-cpf2'), '000.000.000-00');
 $('c-cpf2').addEventListener('paste', e => { e.preventDefault(); setMsg($('c-msg'), 'warn', 'Digite o CPF de novo, sem colar.'); });
 $('c-aviso').addEventListener('change', () => { $('c-email-wrap').hidden = !$('c-aviso').checked; });
+$('c-f-analista').addEventListener('change', () => { $('c-srai-wrap').hidden = !$('c-f-analista').checked; if ($('c-f-analista').checked) carregarSraisCadastro(); });
 $('c-voltar').addEventListener('click', () => mostrar('v-entrada'));
 $('f-cadastro').addEventListener('submit', e => {
   e.preventDefault();
   const d = {
     nome: $('c-nome').value.trim().replace(/\s+/g, ' ').toUpperCase(),
     posto: $('c-posto').value, npm: $('c-npm').value, cpf: $('c-cpf').value, cpf2: $('c-cpf2').value,
-    querAviso: $('c-aviso').checked, email: $('c-email').value.trim()
+    querAviso: $('c-aviso').checked, email: $('c-email').value.trim(),
+    funcoes: [$('c-f-agente').checked && 'AGENTE', $('c-f-analista').checked && 'OPERADOR'].filter(Boolean),
+    sraiPedida: $('c-f-analista').checked ? $('c-srai').value : ''
   };
   const m = $('c-msg');
   if (!nomeValido(d.nome)) return setMsg(m, 'bad', 'Informe o nome completo, com nome e sobrenome.');
@@ -482,14 +585,18 @@ $('f-cadastro').addEventListener('submit', e => {
   if (!RE_NPM.test(d.npm)) return setMsg(m, 'bad', 'Informe o Nº PM completo, no formato 000.000-0.');
   if (!cpfValido(d.cpf)) return setMsg(m, 'bad', 'CPF inválido. Confira os números.');
   if (soDigitos(d.cpf) !== soDigitos(d.cpf2)) return setMsg(m, 'bad', 'Os dois CPFs digitados não são iguais.');
+  if (!d.funcoes.length) return setMsg(m, 'bad', 'Marque a função pretendida: agente autuador, analista de SRAI ou as duas.');
+  if ($('c-f-analista').checked && !d.sraiPedida) return setMsg(m, 'bad', 'Escolha a SRAI em que você trabalha.');
   if (d.querAviso && !RE_EMAIL.test(d.email)) return setMsg(m, 'bad', 'Confira o e-mail informado.');
   ocupado($('c-btn'), async () => {
     try {
       const r = await api('cadastrar', d);
       S.token = r.token; S.usuario = r.usuario;
       ['c-nome', 'c-npm', 'c-cpf', 'c-cpf2', 'c-email'].forEach(id => { $(id).value = ''; });
+      ['c-f-agente', 'c-f-analista'].forEach(id => { $(id).checked = false; }); $('c-srai-wrap').hidden = true;
+      const boasVindas = r.usuario.situacao === 'PENDENTE' ? 'Cadastro feito. Agora o gestor valida a sua função.' : 'Cadastro feito. Bem-vindo!';
       if (r.codigoEnviado) { abrirCodigo(r.email, ''); }
-      else { iniciarApp(); if (r.avisoEmail) toast(r.avisoEmail); else toast('Cadastro feito. Bem-vindo!'); }
+      else { iniciarApp(); toast(r.avisoEmail || boasVindas); }
     } catch (err) { setMsg(m, 'bad', err.message); }
   });
 });
@@ -525,10 +632,33 @@ function iniciarApp() {
     if (!S.usuario.srais.some(s => s.id === S.srai)) S.srai = S.usuario.srais[0].id;
     sel.value = S.srai;
   }
-  abas.push(['minhas', 'Minhas cientificações'], ['meu', 'Meu cadastro']);
+  if (temPerfil('AGENTE') || temPerfil('GESTOR')) abas.push(['minhas', 'Minhas cientificações']);
+  if (temPerfil('GESTOR')) abas.push(['gestao', rotuloGestao()]);
+  abas.push(['meu', 'Meu cadastro']);
   $('tabs').innerHTML = abas.map(a => '<button type="button" class="tab" role="tab" data-aba="' + a[0] + '" aria-selected="false">' + esc(a[1]) + '</button>').join('');
+  renderPendente();
   mostrar('v-app');
   abrirAba(S.aba && abas.some(a => a[0] === S.aba) ? S.aba : abas[0][0]);
+}
+function rotuloGestao() { const n = S.usuario.pendentes || 0; return 'Gestão' + (n ? ' (' + n + ')' : ''); }
+function renderPendente() {
+  const u = S.usuario, el = $('pendente');
+  if (u.situacao !== 'PENDENTE') { el.hidden = true; return; }
+  const faltam = (u.funcoesPedidas || []).filter(f => (u.perfis || []).indexOf(f) < 0);
+  const txt = faltam.map(f => FUNCAO_NOME[f] + (f === 'OPERADOR' && (u.sraisPedidas || []).length ? ' (' + u.sraisPedidas.join(', ') + ')' : '')).join(' e ');
+  el.innerHTML = '<span>Seu cadastro está aguardando a validação do gestor' + (txt ? ' para <strong>' + esc(txt) + '</strong>' : '') + '.</span>' +
+    '<button type="button" class="btn small" id="pendAtualizar">Verificar de novo</button>';
+  el.hidden = false;
+}
+$('pendente').addEventListener('click', e => { const b = e.target.closest('#pendAtualizar'); if (b) ocupado(b, () => atualizarUsuario(true)); });
+async function atualizarUsuario(avisar) {
+  try {
+    const r = await api('meusDados', {});
+    const mudou = JSON.stringify(r.usuario) !== JSON.stringify(S.usuario);
+    S.usuario = r.usuario;
+    if (mudou) iniciarApp(); else salvarSessao();
+    if (avisar) toast(S.usuario.situacao === 'PENDENTE' ? 'Ainda aguardando a validação do gestor.' : 'Cadastro validado. As abas já estão liberadas.');
+  } catch (err) { if (avisar) toast(err.message); }
 }
 $('tabs').addEventListener('click', e => { const b = e.target.closest('[data-aba]'); if (b) abrirAba(b.dataset.aba); });
 $('sraiSel').addEventListener('change', () => {
@@ -544,11 +674,12 @@ function abrirAba(aba) {
   if (S.aba === 'cadastrar' && aba !== 'cadastrar') stopLive();
   S.aba = aba;
   document.querySelectorAll('#tabs .tab').forEach(t => t.setAttribute('aria-selected', String(t.dataset.aba === aba)));
-  ['postagens', 'cadastrar', 'minhas', 'meu'].forEach(a => { $('t-' + a).hidden = a !== aba; });
+  ['postagens', 'cadastrar', 'minhas', 'gestao', 'meu'].forEach(a => { $('t-' + a).hidden = a !== aba; });
   $('sraibar').hidden = !(ehOperador() && (aba === 'postagens' || aba === 'cadastrar') && S.usuario.srais.length > 1);
   if (aba === 'postagens') { if (!S.postagens) carregarPostagens(); else renderPostagens(); }
   if (aba === 'cadastrar') prepararCadastro();
   if (aba === 'minhas') carregarMinhas();
+  if (aba === 'gestao') { if (!G.dados) carregarGestao(); else renderGestao(); }
   if (aba === 'meu') preencherMeu();
 }
 
@@ -689,6 +820,7 @@ function renderMinhas() {
 preencherPostos($('u-posto'), false);
 function preencherMeu() {
   const u = S.usuario;
+  $('u-funcoes').textContent = 'Funções liberadas: ' + ((u.perfis || []).length ? rotFuncoes(u.perfis) : 'nenhuma ainda') + ((u.srais || []).length && temPerfil('OPERADOR') && !temPerfil('GESTOR') ? ' · ' + u.srais.map(s => s.nome).join(', ') : '');
   $('u-nome').value = u.nome; $('u-posto').value = u.posto || POSTOS[0]; $('u-npm').value = u.npm;
   $('u-aviso').checked = !!u.avisoAtivo; $('u-aviso').disabled = !u.email;
   $('u-email-status').textContent = u.email ? 'E-mail confirmado: ' + u.email : 'Para ligar o aviso, cadastre e confirme um e-mail logo abaixo.';
@@ -726,6 +858,149 @@ $('f-email').addEventListener('submit', e => {
   ocupado($('em-confirmar'), async () => {
     try { const r = await api('confirmarEmail', { codigo }); S.usuario = r.usuario; salvarSessao(); preencherMeu(); setMsg($('u-msg'), 'ok', 'E-mail confirmado. O aviso de entrega está ligado.'); }
     catch (err) { setMsg($('em-msg'), 'bad', err.message); }
+  });
+});
+
+/* ===== Gestão ===== */
+const pend = m => m.situacao === 'PENDENTE' && m.ativo;
+function nomeSraiG(id) { const s = ((G.dados && G.dados.srais) || []).find(x => x.id === id); return s ? s.nome : id; }
+async function carregarGestao() {
+  setMsg($('g-msg'), 'info', 'Carregando…');
+  try {
+    G.dados = await api('gestaoDados', {});
+    setMsg($('g-msg'), '', '');
+    atualizarBadgeGestao();
+    renderGestao();
+  } catch (err) { setMsg($('g-msg'), 'bad', err.message); }
+}
+function atualizarBadgeGestao() {
+  S.usuario.pendentes = G.dados ? G.dados.militares.filter(pend).length : 0;
+  salvarSessao();
+  const b = document.querySelector('#tabs [data-aba="gestao"]'); if (b) b.textContent = rotuloGestao();
+}
+function renderGestao() {
+  document.querySelectorAll('#g-seg [data-g]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.g === G.sub)));
+  $('g-militares').hidden = G.sub !== 'militares'; $('g-srais').hidden = G.sub !== 'srais';
+  if (!G.dados) return;
+  if (G.sub === 'militares') renderMilitares(); else renderSrais();
+}
+$('g-seg').addEventListener('click', e => { const b = e.target.closest('[data-g]'); if (b) { G.sub = b.dataset.g; renderGestao(); } });
+$('g-recarregar').addEventListener('click', () => ocupado($('g-recarregar'), carregarGestao));
+['gm-busca', 'gm-sopend'].forEach(id => $(id).addEventListener('input', renderMilitares));
+
+function renderMilitares() {
+  if (!G.dados) return;
+  const busca = semAcento($('gm-busca').value.trim());
+  const todos = G.dados.militares.slice().sort((a, b) => (pend(b) - pend(a)) || (b.ativo - a.ativo) || a.nome.localeCompare(b.nome));
+  const lista = todos.filter(m => (!$('gm-sopend').checked || pend(m)) && (!busca || semAcento(m.nome).indexOf(busca) >= 0 || m.npm.indexOf(busca) >= 0));
+  const np = todos.filter(pend).length;
+  setMsg($('gm-info'), np ? 'warn' : 'info', todos.length ? todos.length + (todos.length === 1 ? ' militar' : ' militares') + (np ? ' · ' + np + ' aguardando validação' : ' · nenhum aguardando validação') : '');
+  if (!todos.length) { $('gm-lista').innerHTML = '<li class="vazio">Nenhum militar cadastrado ainda.</li>'; return; }
+  $('gm-lista').innerHTML = lista.length ? lista.map(itemMilitar).join('') : '<li class="vazio">Nenhum militar com esse filtro.</li>';
+}
+function itemMilitar(m) {
+  const chips = [];
+  if (pend(m)) chips.push('<span class="chip warn">Aguardando validação</span>');
+  if (!m.ativo) chips.push('<span class="chip cancel">' + (m.situacao === 'RECUSADO' ? 'Recusado' : 'Desativado') + '</span>');
+  if (m.preCadastro) chips.push('<span class="chip aguarda">Pré-cadastro</span>');
+  const funcoes = m.perfis.length ? rotFuncoes(m.perfis) : 'Nenhuma função liberada';
+  let html = '<li class="item' + (pend(m) ? ' destaque' : '') + '"><div class="item-top"><strong>' + esc(m.exibicao) + '</strong><span>' + chips.join(' ') + '</span></div>' +
+    '<div class="meta">Nº PM <span class="mono">' + esc(m.npm) + '</span> · ' + esc(funcoes) + (m.srais.length && m.perfis.indexOf('OPERADOR') >= 0 ? ' · ' + esc(m.srais.map(nomeSraiG).join(', ')) : '') + '</div>';
+  if (pend(m)) html += '<div class="meta">Pediu: <strong>' + esc(rotFuncoes(m.funcoesPedidas)) + '</strong>' + (m.sraisPedidas.length ? ' · ' + esc(m.sraisPedidas.map(nomeSraiG).join(', ')) : '') + (m.cadastradoEm ? ' · em ' + esc(m.cadastradoEm.slice(0, 10)) : '') + '</div>';
+  return html + '<div class="item-acts"><button type="button" class="btn small' + (pend(m) ? ' primary' : '') + '" data-gm="' + esc(m.npm) + '">' + (pend(m) ? 'Validar' : 'Editar acesso') + '</button></div></li>';
+}
+$('gm-lista').addEventListener('click', e => { const b = e.target.closest('[data-gm]'); if (b) abrirMilitar(b.dataset.gm); });
+function abrirMilitar(npm) {
+  const m = G.dados.militares.find(x => x.npm === npm); if (!m) return;
+  G.editNpm = npm;
+  const p = pend(m);
+  const perfis = p ? uniq(m.perfis.concat(m.funcoesPedidas)) : m.perfis;
+  const marcadas = p ? uniq(m.srais.concat(m.sraisPedidas)) : m.srais;
+  $('gm-titulo').textContent = p ? 'Validar cadastro' : 'Editar acesso';
+  $('gm-quem').innerHTML = '<strong>' + esc(m.exibicao) + '</strong> · Nº PM <span class="mono">' + esc(m.npm) + '</span>';
+  $('gm-pediu').textContent = m.funcoesPedidas.length ? 'Pediu no cadastro: ' + rotFuncoes(m.funcoesPedidas) + (m.sraisPedidas.length ? ' · ' + m.sraisPedidas.map(nomeSraiG).join(', ') : '') : '';
+  $('gm-agente').checked = perfis.indexOf('AGENTE') >= 0;
+  $('gm-analista').checked = perfis.indexOf('OPERADOR') >= 0;
+  $('gm-gestor').checked = perfis.indexOf('GESTOR') >= 0;
+  $('gm-ativo').checked = m.ativo;
+  const srais = G.dados.srais.filter(s => s.ativa || marcadas.indexOf(s.id) >= 0);
+  const cias = uniq(srais.map(s => s.companhia || 'Sem Companhia'));
+  $('gm-srais').innerHTML = srais.length ? cias.map(c => '<p class="lbl" style="margin:4px 0 0">' + esc(c) + '</p>' +
+    srais.filter(s => (s.companhia || 'Sem Companhia') === c).map(s => '<label class="check"><input type="checkbox" value="' + esc(s.id) + '"' + (marcadas.indexOf(s.id) >= 0 ? ' checked' : '') + '> <span>' + esc(s.nome) + (s.ativa ? '' : ' (inativa)') + '</span></label>').join('')).join('')
+    : '<p class="note">Nenhuma SRAI cadastrada. Cadastre em "SRAIs".</p>';
+  $('gm-srais-wrap').hidden = !$('gm-analista').checked;
+  $('gm-recusar').hidden = !p;
+  $('gm-salvar').textContent = p ? 'Validar' : 'Salvar';
+  const proprio = npm === S.usuario.npm;
+  $('gm-gestor').disabled = proprio; $('gm-ativo').disabled = proprio;
+  setMsg($('gm-msg'), proprio ? 'info' : '', proprio ? 'Você não pode tirar o seu próprio acesso de gestor.' : '');
+  $('f-gmil').hidden = false;
+  $('f-gmil').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function fecharMilitar() { $('f-gmil').hidden = true; G.editNpm = ''; }
+$('gm-analista').addEventListener('change', () => { $('gm-srais-wrap').hidden = !$('gm-analista').checked; });
+$('gm-cancelar').addEventListener('click', fecharMilitar);
+$('f-gmil').addEventListener('submit', e => { e.preventDefault(); salvarMilitar(false, $('gm-salvar')); });
+$('gm-recusar').addEventListener('click', () => {
+  const m = G.dados.militares.find(x => x.npm === G.editNpm); if (!m) return;
+  if (!confirm('Recusar o cadastro de ' + m.exibicao + '?\nEle não vai conseguir entrar no painel. Dá para reativar depois em "Editar acesso".')) return;
+  salvarMilitar(true, $('gm-recusar'));
+});
+function salvarMilitar(recusar, btn) {
+  const perfis = [['gm-agente', 'AGENTE'], ['gm-analista', 'OPERADOR'], ['gm-gestor', 'GESTOR']].filter(x => $(x[0]).checked).map(x => x[1]);
+  const srais = perfis.indexOf('OPERADOR') >= 0 ? Array.from($('gm-srais').querySelectorAll('input:checked')).map(i => i.value) : [];
+  const ativo = $('gm-ativo').checked, m = $('gm-msg');
+  if (!recusar) {
+    if (perfis.indexOf('OPERADOR') >= 0 && !srais.length) return setMsg(m, 'bad', 'Marque a SRAI em que ele trabalha como analista.');
+    if (ativo && !perfis.length) return setMsg(m, 'bad', 'Marque pelo menos uma função, ou desmarque "Acesso ativo".');
+  }
+  ocupado(btn, async () => {
+    try {
+      const r = await api('gestaoSalvarMilitar', { npm: G.editNpm, perfis, srais, ativo, recusar });
+      const i = G.dados.militares.findIndex(x => x.npm === r.militar.npm); if (i >= 0) G.dados.militares[i] = r.militar;
+      fecharMilitar(); atualizarBadgeGestao(); renderMilitares();
+      toast(recusar ? 'Cadastro recusado.' : 'Acesso salvo.');
+      if (r.militar.npm === S.usuario.npm) atualizarUsuario(false);
+    } catch (err) { setMsg(m, 'bad', err.message); }
+  });
+}
+
+function renderSrais() {
+  if (!G.dados) return;
+  const lista = G.dados.srais.slice().sort((a, b) => (b.ativa - a.ativa) || a.companhia.localeCompare(b.companhia) || a.nome.localeCompare(b.nome));
+  const analistas = {};
+  G.dados.militares.forEach(m => { if (m.ativo && m.perfis.indexOf('OPERADOR') >= 0) m.srais.forEach(id => { analistas[id] = (analistas[id] || 0) + 1; }); });
+  $('gs-cias').innerHTML = uniq(G.dados.srais.map(s => s.companhia).filter(Boolean)).map(c => '<option value="' + esc(c) + '">').join('');
+  $('gs-lista').innerHTML = lista.length ? lista.map(s => '<li class="item"><div class="item-top"><strong>' + esc(s.nome) + '</strong>' + (s.ativa ? '' : '<span class="chip cancel">Inativa</span>') + '</div>' +
+    '<div class="meta">' + esc(s.companhia) + ' · ' + (analistas[s.id] || 0) + ((analistas[s.id] || 0) === 1 ? ' analista' : ' analistas') + '</div>' +
+    '<div class="item-acts"><button type="button" class="btn small" data-gs="' + esc(s.id) + '">Editar</button></div></li>').join('')
+    : '<li class="vazio">Nenhuma SRAI cadastrada ainda. Use "Nova SRAI".</li>';
+}
+function abrirSrai(id) {
+  const s = id ? G.dados.srais.find(x => x.id === id) : null;
+  G.editSrai = s ? s.id : '';
+  $('gs-titulo').textContent = s ? 'Editar SRAI' : 'Nova SRAI';
+  $('gs-nome').value = s ? s.nome : ''; $('gs-cia').value = s ? s.companhia : '';
+  $('gs-ativa').checked = s ? s.ativa : true; $('gs-ativa-wrap').hidden = !s;
+  setMsg($('gs-msg'), '', '');
+  $('f-gsrai').hidden = false; $('gs-nome').focus();
+}
+$('gs-nova').addEventListener('click', () => abrirSrai(''));
+$('gs-lista').addEventListener('click', e => { const b = e.target.closest('[data-gs]'); if (b) abrirSrai(b.dataset.gs); });
+$('gs-cancelar').addEventListener('click', () => { $('f-gsrai').hidden = true; G.editSrai = ''; });
+$('f-gsrai').addEventListener('submit', e => {
+  e.preventDefault();
+  const d = { id: G.editSrai, nome: $('gs-nome').value.trim().replace(/\s+/g, ' '), companhia: $('gs-cia').value.trim().replace(/\s+/g, ' '), ativa: $('gs-ativa').checked };
+  if (d.nome.length < 3) return setMsg($('gs-msg'), 'bad', 'Informe o nome da SRAI.');
+  if (d.companhia.length < 2) return setMsg($('gs-msg'), 'bad', 'Informe a Companhia.');
+  ocupado($('gs-salvar'), async () => {
+    try {
+      await api('gestaoSalvarSrai', d);
+      $('f-gsrai').hidden = true; G.editSrai = '';
+      toast(d.id ? 'SRAI atualizada.' : 'SRAI cadastrada.');
+      await carregarGestao();
+      atualizarUsuario(false);
+    } catch (err) { setMsg($('gs-msg'), 'bad', err.message); }
   });
 });
 
@@ -909,7 +1184,7 @@ async function lerQuadro() {
 }
 
 /* ===== Início ===== */
-if (lerSessao()) iniciarApp(); else mostrar('v-entrada');
+if (lerSessao()) { iniciarApp(); atualizarUsuario(false); } else mostrar('v-entrada');
 </script>
 </body>
 </html>
