@@ -60,6 +60,10 @@ input[type=checkbox],input[type=radio]{width:auto;height:auto}
 .actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;align-items:center}
 .msg{font-size:14px;margin:0;min-height:1.4em}
 .msg.ok{color:var(--ok)}.msg.warn{color:var(--warn)}.msg.bad{color:var(--bad)}.msg.info{color:var(--muted)}
+.sug{display:flex;flex-direction:column;gap:8px;border:1px solid var(--warn);background:var(--warn-soft);border-radius:8px;padding:12px}
+.sug p{margin:0;font-size:14px;color:var(--warn)}
+.sug .linha{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sug .btn{text-align:left}
 .check{display:flex;gap:10px;align-items:flex-start;font-size:15px;cursor:pointer}
 .check input{margin-top:4px;accent-color:var(--caqui)}
 .tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin-bottom:16px}
@@ -287,6 +291,7 @@ footer .wrap{padding-block:16px;border-top:1px solid var(--line)}
           <label class="lbl" for="ag-npm">Nº PM do agente autuador</label>
           <input id="ag-npm" inputmode="numeric" autocomplete="off" placeholder="000.000-0" maxlength="9" class="mono">
           <p class="msg info" id="ag-info" role="status"></p>
+          <div class="sug" id="ag-sug" hidden></div>
           <div class="grid2" id="ag-pre" hidden>
             <div class="field"><label class="lbl" for="ag-nome">Nome completo do agente</label><input id="ag-nome" autocomplete="off" style="text-transform:uppercase"></div>
             <div class="field"><label class="lbl" for="ag-posto">Posto ou graduação</label><select id="ag-posto"></select></div>
@@ -1035,10 +1040,28 @@ $('aut').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDe
 function tipoSel() { return $('t-cp').checked ? 'CIENTIFICACAO' : $('t-pi').checked ? 'INTERNA' : ''; }
 function mudouTipo() { $('ag-wrap').hidden = tipoSel() !== 'CIENTIFICACAO'; }
 $('t-pi').addEventListener('change', mudouTipo); $('t-cp').addEventListener('change', mudouTipo);
-let agBusca = 0, agEncontrado = null;
+let agBusca = 0, agEncontrado = null, agConfirmado = false, agPendente = null;
+function mostrarParecidos(lista, titulo, comOutro) {
+  const box = $('ag-sug');
+  if (!lista || !lista.length) { box.hidden = true; box.innerHTML = ''; return; }
+  box.innerHTML = '<p>' + esc(titulo) + '</p>' +
+    lista.map(p => '<div class="linha"><button type="button" class="btn small" data-npm="' + esc(p.npm) + '">Usar ' + esc(p.npm) + ' · ' + esc(p.nome) + '</button><span class="note">' + esc(p.motivo) + '</span></div>').join('') +
+    (comOutro ? '<div class="linha"><button type="button" class="btn small" data-act="outro">Não, é outro militar: salvar com ' + esc($('ag-npm').value) + '</button></div>' : '');
+  box.hidden = false;
+}
+$('ag-sug').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.npm) {
+    $('ag-npm').value = b.dataset.npm; $('ag-nome').value = ''; agPendente = null;
+    $('ag-npm').dispatchEvent(new Event('input')); setMsg($('pp-msg'), '', '');
+  } else if (b.dataset.act === 'outro' && agPendente) {
+    agConfirmado = true; const p = agPendente; agPendente = null; mostrarParecidos(null);
+    salvarPostagem(p.manter, p.btn);
+  }
+});
 $('ag-npm').addEventListener('input', async () => {
-  const npm = $('ag-npm').value; const meu = ++agBusca; agEncontrado = null;
-  $('ag-pre').hidden = true;
+  const npm = $('ag-npm').value; const meu = ++agBusca; agEncontrado = null; agConfirmado = false; agPendente = null;
+  $('ag-pre').hidden = true; mostrarParecidos(null);
   if (!RE_NPM.test(npm)) { setMsg($('ag-info'), 'info', npm ? 'Continue digitando o Nº PM…' : ''); return; }
   setMsg($('ag-info'), 'info', 'Procurando…');
   try {
@@ -1046,9 +1069,17 @@ $('ag-npm').addEventListener('input', async () => {
     if (meu !== agBusca) return;
     agEncontrado = r.encontrado;
     if (r.encontrado) setMsg($('ag-info'), 'ok', r.nome);
-    else { setMsg($('ag-info'), 'warn', 'Este agente ainda não tem cadastro. Informe o nome e o posto dele.'); $('ag-pre').hidden = false; }
+    else {
+      const parecidos = r.parecidos || [];
+      setMsg($('ag-info'), 'warn', parecidos.length
+        ? 'Não há militar com esse Nº PM. Confira se não é um destes:'
+        : 'Este agente ainda não tem cadastro. Informe o nome e o posto dele.');
+      mostrarParecidos(parecidos, 'Você quis dizer:', false);
+      $('ag-pre').hidden = false;
+    }
   } catch (err) { if (meu === agBusca) setMsg($('ag-info'), 'bad', err.message); }
 });
+$('ag-nome').addEventListener('input', () => { agConfirmado = false; });
 async function salvarPostagem(manter, btn) {
   const m = $('pp-msg');
   const estado = checarCodigo();
@@ -1063,11 +1094,20 @@ async function salvarPostagem(manter, btn) {
     if (agEncontrado === false) {
       d.agenteNome = $('ag-nome').value.trim().replace(/\s+/g, ' ').toUpperCase(); d.agentePosto = $('ag-posto').value;
       if (!nomeValido(d.agenteNome)) return setMsg(m, 'bad', 'Informe o nome completo do agente.');
+      if (agConfirmado) d.confirmarOutroMilitar = true;
     }
   }
   await ocupado(btn, async () => {
     try {
       const r = await api('cadastrarPostagem', d);
+      if (r.precisaConfirmar) {
+        agPendente = { manter, btn };
+        mostrarParecidos(r.parecidos, 'Já existe militar parecido. É um destes?', true);
+        setMsg(m, 'warn', 'A postagem ainda não foi salva. Confira o agente autuador.');
+        $('ag-sug').scrollIntoView({ block: 'center', behavior: 'smooth' });
+        return;
+      }
+      agConfirmado = false; mostrarParecidos(null);
       recentes.unshift({ codigo: d.codigo, txt: 'Auto ' + d.numAuto + '/' + d.anoAuto + ' · ' + (tipo === 'CIENTIFICACAO' ? 'Cientificação' : 'Interna') });
       $('pp-recentes').innerHTML = recentes.slice(0, 10).map(x => '<li class="item"><div class="item-top"><span class="cod">' + esc(x.codigo) + '</span><span class="chip aguarda">Aguardando 1ª consulta</span></div><div class="meta">' + esc(x.txt) + '</div></li>').join('');
       $('pp-recentes-wrap').hidden = false;
