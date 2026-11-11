@@ -64,6 +64,18 @@ input[type=checkbox],input[type=radio]{width:auto;height:auto}
 .sug p{margin:0;font-size:14px;color:var(--warn)}
 .sug .linha{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .sug .btn{text-align:left}
+.ac{position:relative}
+.ac-lista{position:absolute;z-index:5;left:0;right:0;top:calc(100% + 4px);margin:0;padding:4px;list-style:none;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.12);max-height:320px;overflow-y:auto}
+.ac-lista li{display:flex;justify-content:space-between;gap:12px;align-items:baseline;padding:8px 10px;border-radius:6px;cursor:pointer}
+.ac-lista li[aria-selected="true"],.ac-lista li:hover{background:var(--caqui-soft)}
+.ac-lista .ac-nome{font-weight:500;min-width:0;overflow-wrap:anywhere}
+.ac-lista .ac-npm{font-family:var(--f-mono);font-size:14px;color:var(--muted);white-space:nowrap}
+.ac-lista .ac-novo{color:var(--caqui-ink);font-weight:500}
+.ac-lista mark{background:transparent;color:inherit;text-decoration:underline;text-decoration-color:var(--caqui);text-underline-offset:3px}
+.recentes{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:13px;color:var(--muted)}
+.recentes button{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:3px 10px;cursor:pointer}
+.recentes button:hover{border-color:var(--caqui)}
+.ag-novo{display:flex;flex-direction:column;gap:12px;border:1px dashed var(--line);border-radius:8px;padding:12px}
 .check{display:flex;gap:10px;align-items:flex-start;font-size:15px;cursor:pointer}
 .check input{margin-top:4px;accent-color:var(--caqui)}
 .tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin-bottom:16px}
@@ -288,13 +300,24 @@ footer .wrap{padding-block:16px;border-top:1px solid var(--line)}
         </fieldset>
 
         <div class="field" id="ag-wrap" hidden>
-          <label class="lbl" for="ag-npm">Nº PM do agente autuador</label>
-          <input id="ag-npm" inputmode="numeric" autocomplete="off" placeholder="000.000-0" maxlength="9" class="mono">
+          <label class="lbl" for="ag-busca">Agente autuador</label>
+          <div class="ac">
+            <input id="ag-busca" autocomplete="off" spellcheck="false" placeholder="Digite o nome ou o Nº PM" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="ag-lista">
+            <ul class="ac-lista" id="ag-lista" role="listbox" hidden></ul>
+          </div>
+          <div class="recentes" id="ag-recentes" hidden></div>
           <p class="msg info" id="ag-info" role="status"></p>
           <div class="sug" id="ag-sug" hidden></div>
-          <div class="grid2" id="ag-pre" hidden>
-            <div class="field"><label class="lbl" for="ag-nome">Nome completo do agente</label><input id="ag-nome" autocomplete="off" style="text-transform:uppercase"></div>
-            <div class="field"><label class="lbl" for="ag-posto">Posto ou graduação</label><select id="ag-posto"></select></div>
+          <div class="ag-novo" id="ag-novo" hidden>
+            <p class="note">Agente novo, ainda sem cadastro. Informe os dados dele:</p>
+            <div class="field">
+              <label class="lbl" for="ag-npm">Nº PM do agente</label>
+              <input id="ag-npm" inputmode="numeric" autocomplete="off" placeholder="000.000-0" maxlength="9" class="mono">
+            </div>
+            <div class="grid2" id="ag-pre" hidden>
+              <div class="field"><label class="lbl" for="ag-nome">Nome completo do agente</label><input id="ag-nome" autocomplete="off" style="text-transform:uppercase"></div>
+              <div class="field"><label class="lbl" for="ag-posto">Posto ou graduação</label><select id="ag-posto"></select></div>
+            </div>
           </div>
         </div>
 
@@ -1021,6 +1044,8 @@ function prepararCadastro() {
   if (!$('dt').value) $('dt').value = hojeISO();
   $('dt').max = hojeISO();
   if (!S.postagens) api('listarPostagens', { sraiId: S.srai }).then(r => { S.postagens = r.postagens.sort((a, b) => b.id.localeCompare(a.id)); }).catch(() => {});
+  carregarAgentes(true);
+  mostrarRecentes();
   setTimeout(() => $('cod').focus(), 50);
 }
 function checarCodigo() {
@@ -1068,7 +1093,7 @@ $('ag-npm').addEventListener('input', async () => {
     const r = await api('buscarMilitar', { npm });
     if (meu !== agBusca) return;
     agEncontrado = r.encontrado;
-    if (r.encontrado) setMsg($('ag-info'), 'ok', r.nome);
+    if (r.encontrado) selecionarAgente({ npm, exibicao: r.nome });
     else {
       const parecidos = r.parecidos || [];
       setMsg($('ag-info'), 'warn', parecidos.length
@@ -1080,6 +1105,144 @@ $('ag-npm').addEventListener('input', async () => {
   } catch (err) { if (meu === agBusca) setMsg($('ag-info'), 'bad', err.message); }
 });
 $('ag-nome').addEventListener('input', () => { agConfirmado = false; });
+
+/* ===== Agente autuador: busca por nome ou Nº PM ===== */
+S.agentes = null;
+let acItens = [], acAtivo = -1, agSel = null, agCarregando = false, agFalhou = false;
+const normAg = s => semAcento(s).replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+const rotuloAg = a => (a.posto ? a.posto + ' PM ' : '') + a.nome;
+function carregarAgentes(forcar) {
+  if ((S.agentes && !forcar) || agCarregando) return;
+  agCarregando = true;
+  api('listarAgentes', {})
+    .then(r => { agFalhou = false; S.agentes = (r.agentes || []).map(a => Object.assign(a, { chave: normAg(a.nome), dig: soDigitos(a.npm) })); })
+    .catch(() => { agFalhou = true; })
+    .finally(() => { agCarregando = false; });
+}
+function buscarAgentes(txt) {
+  const q = normAg(txt), dig = soDigitos(txt), soNumeros = /^[\d .\-]+$/.test(txt.trim());
+  if (!q || !S.agentes) return [];
+  const termos = q.split(' ');
+  const res = [];
+  S.agentes.forEach(a => {
+    let pont = -1;
+    if (soNumeros) { const i = a.dig.indexOf(dig); if (dig && i >= 0) pont = i === 0 ? 3 : 1; }
+    else {
+      const palavras = a.chave.split(' ');
+      if (termos.every(t => palavras.some(p => p.indexOf(t) === 0))) pont = a.chave.indexOf(q) === 0 ? 4 : 3;
+      else if (a.chave.indexOf(q) >= 0) pont = 1;
+    }
+    if (pont >= 0) res.push({ a, pont });
+  });
+  res.sort((x, y) => (y.pont - x.pont) || (y.a.proprio - x.a.proprio) || x.a.nome.localeCompare(y.a.nome));
+  return res.slice(0, 8).map(x => x.a);
+}
+function destacar(nome, txt) {
+  const termos = normAg(txt).split(' ').filter(Boolean);
+  return nome.split(' ').map(w => {
+    const t = termos.find(t => normAg(w).indexOf(t) === 0);
+    return t ? '<mark>' + esc(w.slice(0, t.length)) + '</mark>' + esc(w.slice(t.length)) : esc(w);
+  }).join(' ');
+}
+function abrirLista(itens, txt) {
+  acItens = itens; acAtivo = itens.length ? 0 : -1;
+  const soNumeros = /^[\d .\-]+$/.test(txt.trim());
+  $('ag-lista').innerHTML = itens.map((a, i) =>
+    '<li role="option" data-i="' + i + '" aria-selected="' + (i === acAtivo) + '"><span class="ac-nome">' +
+    (a.posto ? esc(a.posto) + ' PM ' : '') + (soNumeros ? esc(a.nome) : destacar(a.nome, txt)) +
+    '</span><span class="ac-npm">' + esc(a.npm) + '</span></li>').join('') +
+    '<li role="option" data-i="novo" class="ac-novo" aria-selected="' + (acAtivo < 0) + '">Não está na lista: cadastrar agente novo</li>';
+  if (acAtivo < 0) acAtivo = itens.length;
+  $('ag-lista').hidden = false; $('ag-busca').setAttribute('aria-expanded', 'true');
+}
+function fecharLista() { $('ag-lista').hidden = true; $('ag-busca').setAttribute('aria-expanded', 'false'); acAtivo = -1; }
+function marcarAtivo(i) {
+  acAtivo = i;
+  document.querySelectorAll('#ag-lista li').forEach((li, j) => {
+    li.setAttribute('aria-selected', String(j === i));
+    if (j === i) li.scrollIntoView({ block: 'nearest' });
+  });
+}
+function escolher(i) { if (i >= acItens.length) abrirNovo($('ag-busca').value); else selecionarAgente(acItens[i]); }
+function selecionarAgente(a) {
+  const exibicao = a.exibicao || rotuloAg(a);
+  agSel = { npm: a.npm, exibicao }; agEncontrado = true; agConfirmado = false; agPendente = null;
+  $('ag-npm').value = a.npm; $('ag-nome').value = '';
+  $('ag-busca').value = exibicao;
+  $('ag-novo').hidden = true; $('ag-pre').hidden = true; mostrarParecidos(null); fecharLista();
+  setMsg($('ag-info'), 'ok', 'Nº PM ' + a.npm);
+  guardarRecente(agSel);
+}
+function abrirNovo(txt) {
+  agSel = null; agEncontrado = null; fecharLista();
+  $('ag-novo').hidden = false; setMsg($('ag-info'), '', '');
+  const d = soDigitos(txt);
+  if (/^[\d .\-]+$/.test(String(txt).trim()) && d.length) {
+    $('ag-npm').value = d.slice(0, 7); $('ag-npm').dispatchEvent(new Event('input'));
+    if (d.length < 7) $('ag-npm').focus();
+  } else {
+    $('ag-npm').value = ''; $('ag-npm').dispatchEvent(new Event('input'));
+    if (String(txt).trim()) $('ag-nome').value = String(txt).trim().replace(/\s+/g, ' ').toUpperCase();
+    $('ag-npm').focus();
+  }
+}
+$('ag-busca').addEventListener('input', () => {
+  const txt = $('ag-busca').value;
+  agSel = null; agEncontrado = null; agConfirmado = false; agPendente = null;
+  $('ag-npm').value = ''; $('ag-novo').hidden = true; $('ag-pre').hidden = true; mostrarParecidos(null);
+  if (!txt.trim()) { fecharLista(); setMsg($('ag-info'), '', ''); return; }
+  const d = soDigitos(txt), soNumeros = /^[\d .\-]+$/.test(txt.trim());
+  if (!S.agentes) {
+    carregarAgentes();
+    fecharLista();
+    if (soNumeros && d.length === 7) { abrirNovo(txt); return; }
+    setMsg($('ag-info'), 'info', agFalhou
+      ? 'A busca por nome não está disponível agora. Digite o Nº PM completo do agente.'
+      : 'Carregando a lista de agentes… Se preferir, digite o Nº PM completo.');
+    return;
+  }
+  if (soNumeros && d.length === 7) {
+    const exato = S.agentes.find(a => a.dig === d);
+    if (exato) selecionarAgente(exato); else abrirNovo(txt);
+    return;
+  }
+  const itens = buscarAgentes(txt);
+  abrirLista(itens, txt);
+  setMsg($('ag-info'), itens.length ? '' : 'warn', itens.length ? '' : 'Nenhum agente cadastrado com esse nome.');
+});
+$('ag-busca').addEventListener('keydown', e => {
+  const aberta = !$('ag-lista').hidden;
+  if (e.key === 'ArrowDown' && aberta) { e.preventDefault(); marcarAtivo(Math.min(acAtivo + 1, acItens.length)); }
+  else if (e.key === 'ArrowUp' && aberta) { e.preventDefault(); marcarAtivo(Math.max(acAtivo - 1, 0)); }
+  else if (e.key === 'Enter') { e.preventDefault(); if (aberta && acAtivo >= 0) escolher(acAtivo); else if (agSel) $('obs').focus(); }
+  else if (e.key === 'Escape' && aberta) { e.preventDefault(); fecharLista(); }
+});
+$('ag-busca').addEventListener('focus', () => { if (!agSel && $('ag-busca').value.trim() && S.agentes) abrirLista(buscarAgentes($('ag-busca').value), $('ag-busca').value); });
+$('ag-busca').addEventListener('blur', () => setTimeout(fecharLista, 150));
+$('ag-lista').addEventListener('mousedown', e => {
+  const li = e.target.closest('li'); if (!li) return;
+  e.preventDefault();
+  escolher(li.dataset.i === 'novo' ? acItens.length : Number(li.dataset.i));
+});
+
+const CHAVE_REC = 'ccp_agentes_recentes';
+function lerRecentes() { try { return JSON.parse(localStorage.getItem(CHAVE_REC) || '[]') || []; } catch (e) { return []; } }
+function guardarRecente(a) {
+  const l = [a].concat(lerRecentes().filter(x => x.npm !== a.npm)).slice(0, 6);
+  try { localStorage.setItem(CHAVE_REC, JSON.stringify(l)); } catch (e) {}
+  mostrarRecentes();
+}
+function mostrarRecentes() {
+  const l = lerRecentes(), box = $('ag-recentes');
+  if (!l.length) { box.hidden = true; box.innerHTML = ''; return; }
+  box.innerHTML = '<span>Recentes:</span>' + l.map(a => '<button type="button" data-npm="' + esc(a.npm) + '" title="Nº PM ' + esc(a.npm) + '">' + esc(a.exibicao) + '</button>').join('');
+  box.hidden = false;
+}
+$('ag-recentes').addEventListener('click', e => {
+  const b = e.target.closest('button[data-npm]'); if (!b) return;
+  const a = lerRecentes().find(x => x.npm === b.dataset.npm);
+  if (a) { selecionarAgente(a); setMsg($('pp-msg'), '', ''); }
+});
 async function salvarPostagem(manter, btn) {
   const m = $('pp-msg');
   const estado = checarCodigo();
@@ -1090,7 +1253,7 @@ async function salvarPostagem(manter, btn) {
   const d = { sraiId: S.srai, codigo: $('cod').value, numAuto: $('aut').value, anoAuto: $('ano').value, dataPostagem: $('dt').value, tipo, obs: $('obs').value.trim() };
   if (tipo === 'CIENTIFICACAO') {
     d.agenteNpm = $('ag-npm').value;
-    if (!RE_NPM.test(d.agenteNpm)) return setMsg(m, 'bad', 'Informe o Nº PM do agente no formato 000.000-0.');
+    if (!RE_NPM.test(d.agenteNpm)) return setMsg(m, 'bad', $('ag-novo').hidden ? 'Escolha o agente autuador na lista ou cadastre um agente novo.' : 'Informe o Nº PM do agente no formato 000.000-0.');
     if (agEncontrado === false) {
       d.agenteNome = $('ag-nome').value.trim().replace(/\s+/g, ' ').toUpperCase(); d.agentePosto = $('ag-posto').value;
       if (!nomeValido(d.agenteNome)) return setMsg(m, 'bad', 'Informe o nome completo do agente.');
@@ -1117,7 +1280,11 @@ async function salvarPostagem(manter, btn) {
       if (!manter) {
         $('t-pi').checked = false; $('t-cp').checked = false; mudouTipo();
         $('ag-npm').value = ''; $('ag-nome').value = ''; $('ag-pre').hidden = true; setMsg($('ag-info'), '', ''); agEncontrado = null;
+        $('ag-busca').value = ''; agSel = null; $('ag-novo').hidden = true; fecharLista();
+      } else if (r.preCadastro && d.agenteNome) {
+        selecionarAgente({ npm: d.agenteNpm, nome: d.agenteNome, posto: d.agentePosto || '' });
       }
+      if (r.preCadastro) carregarAgentes(true);
       $('cod').focus();
       api('listarPostagens', { sraiId: S.srai }).then(x => { S.postagens = x.postagens.sort((a, b) => b.id.localeCompare(a.id)); }).catch(() => {});
     } catch (err) { setMsg(m, 'bad', err.message); }
