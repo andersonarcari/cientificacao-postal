@@ -75,6 +75,8 @@ input[type=checkbox],input[type=radio]{width:auto;height:auto}
 .recentes{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:13px;color:var(--muted)}
 .recentes button{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:3px 10px;cursor:pointer}
 .recentes button:hover{border-color:var(--caqui)}
+.editando{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;justify-content:space-between;border:1px solid var(--caqui);background:var(--caqui-soft);color:var(--caqui-ink);border-radius:8px;padding:10px 12px;font-size:14px}
+#cod[readonly]{background:var(--bg);color:var(--muted)}
 .ag-novo{display:flex;flex-direction:column;gap:12px;border:1px dashed var(--line);border-radius:8px;padding:12px}
 .check{display:flex;gap:10px;align-items:flex-start;font-size:15px;cursor:pointer}
 .check input{margin-top:4px;accent-color:var(--caqui)}
@@ -265,13 +267,17 @@ footer .wrap{padding-block:16px;border-top:1px solid var(--line)}
     <!-- Cadastrar postagem -->
     <section id="t-cadastrar" hidden>
       <form class="card" id="f-postagem" novalidate style="max-width:640px">
-        <h2>Cadastrar postagem</h2>
+        <h2 id="pp-titulo">Cadastrar postagem</h2>
         <p class="note">Para a SRAI: <strong id="pp-srai"></strong></p>
+        <div class="editando" id="pp-editando" hidden>
+          <span>Editando a postagem <strong id="pp-ed-id"></strong>. As alterações ficam registradas.</span>
+          <button type="button" class="btn small" id="pp-ed-cancelar">Cancelar edição</button>
+        </div>
 
         <div class="field">
           <label class="lbl" for="cod">Código de rastreio</label>
           <div class="code-row">
-            <input id="cod" maxlength="13" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="AA123456785BR">
+            <input id="cod" maxlength="40" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="AA123456785BR">
             <button type="button" class="cam" id="camBtn">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
               Ler com a câmera
@@ -282,7 +288,7 @@ footer .wrap{padding-block:16px;border-top:1px solid var(--line)}
           <div class="live" id="live" hidden><video id="vid" playsinline muted></video><div class="guide"></div></div>
           <div class="actions" id="liveBar" hidden style="justify-content:space-between"><span class="note">Aponte para o código de barras do rastreio.</span><button type="button" class="btn small" id="liveStop">Cancelar</button></div>
           <p class="msg info" id="cst" role="status">Bipe a etiqueta, use a câmera ou digite o código.</p>
-          <p class="note">A câmera não abriu? <label for="foto2" class="btn link">Escolha uma foto da galeria</label>.</p>
+          <p class="note" id="cam-galeria">A câmera não abriu? <label for="foto2" class="btn link">Escolha uma foto da galeria</label>.</p>
         </div>
 
         <div class="grid3">
@@ -690,6 +696,7 @@ async function atualizarUsuario(avisar) {
 }
 $('tabs').addEventListener('click', e => { const b = e.target.closest('[data-aba]'); if (b) abrirAba(b.dataset.aba); });
 $('sraiSel').addEventListener('change', () => {
+  if (S.editando) encerrarEdicao();
   S.srai = $('sraiSel').value; S.postagens = null; salvarSessao();
   if (S.aba === 'postagens') carregarPostagens();
   $('pp-srai').textContent = nomeSrai();
@@ -700,6 +707,7 @@ function nomeSrai() { const s = (S.usuario.srais || []).find(x => x.id === S.sra
 
 function abrirAba(aba) {
   if (S.aba === 'cadastrar' && aba !== 'cadastrar') stopLive();
+  if (S.editando && aba !== 'cadastrar') encerrarEdicao();
   S.aba = aba;
   document.querySelectorAll('#tabs .tab').forEach(t => t.setAttribute('aria-selected', String(t.dataset.aba === aba)));
   ['postagens', 'cadastrar', 'minhas', 'gestao', 'meu'].forEach(a => { $('t-' + a).hidden = a !== aba; });
@@ -772,6 +780,7 @@ function itemPostagem(p) {
   else if (p.ultimaConsulta) partes.push('Última consulta ' + esc(p.ultimaConsulta.slice(0, 16)));
   if (p.tipo === 'CIENTIFICACAO' && p.dataEntrega && p.status === 'Entregue') partes.push(p.lancadoGaia ? 'Lançado no GAIA' : '<strong>Falta lançar no GAIA</strong>');
   const acts = [];
+  if (p.situacao !== 'CANCELADA') acts.push('<button type="button" class="btn small" data-act="editar" data-id="' + esc(p.id) + '">Editar</button>');
   if (p.temArquivo) acts.push('<button type="button" class="btn small" data-act="baixar" data-id="' + esc(p.id) + '">Baixar comprovante</button>');
   if (p.situacao === 'ABERTA') acts.push('<button type="button" class="btn small" data-act="cancelar" data-id="' + esc(p.id) + '">Cancelar</button>');
   return '<li class="item' + (pendenteGaia(p) ? ' destaque' : '') + '"><div class="item-top"><span class="cod">' + esc(p.codigo) + '</span><span class="chip ' + classeStatus(p) + '">' + esc(rotuloStatus(p)) + '</span></div>' +
@@ -789,7 +798,9 @@ async function acaoItem(e, lista) {
   const b = e.target.closest('[data-act]'); if (!b) return;
   const p = (lista || []).find(x => x.id === b.dataset.id); if (!p) return;
   const act = b.dataset.act;
-  if (act === 'baixar') {
+  if (act === 'editar') {
+    iniciarEdicao(p);
+  } else if (act === 'baixar') {
     ocupado(b, async () => {
       try { const r = await api('baixarComprovante', { id: p.id }); baixarBase64(r.nome, r.mime, r.base64); }
       catch (err) { toast(err.message); }
@@ -1038,6 +1049,8 @@ mascara($('ag-npm'), '000.000-0');
 const recentes = [];
 function prepararCadastro() {
   $('pp-srai').textContent = nomeSrai();
+  $('pp-salvar').textContent = S.editando ? 'Salvar alterações' : 'Salvar';
+  $('pp-outra').hidden = !!S.editando;
   const ano = new Date().getFullYear(), sel = $('ano'), atual = sel.value;
   sel.innerHTML = [0, 1, 2, 3, 4].map(i => '<option>' + (ano - i) + '</option>').join('');
   if (atual) sel.value = atual;
@@ -1053,7 +1066,7 @@ function checarCodigo() {
   if (!c) { setMsg(el, 'info', 'Bipe a etiqueta, use a câmera ou digite o código.'); return null; }
   if (!S10.test(c)) { setMsg(el, c.length >= 13 ? 'bad' : 'info', c.length >= 13 ? 'Formato esperado: 2 letras, 9 números e 2 letras.' : 'Continue digitando…'); return c.length >= 13 ? 'bad' : null; }
   if (dvS10(c) !== Number(c[10])) { setMsg(el, 'bad', 'Dígito verificador não confere. Confira a etiqueta.'); return 'bad'; }
-  const dup = (S.postagens || []).find(p => p.codigo === c && p.situacao !== 'CANCELADA');
+  const dup = (S.postagens || []).find(p => p.codigo === c && p.situacao !== 'CANCELADA' && !(S.editando && p.id === S.editando.id));
   if (dup) { setMsg(el, 'bad', 'Código já cadastrado nesta SRAI (auto ' + dup.numAuto + '/' + dup.anoAuto + ').'); return 'bad'; }
   if (!c.endsWith('BR')) { setMsg(el, 'warn', 'Código válido, mas não termina em BR. Confira se é postagem nacional.'); return 'ok'; }
   setMsg(el, 'ok', 'Código válido.'); return 'ok';
@@ -1260,9 +1273,10 @@ async function salvarPostagem(manter, btn) {
       if (agConfirmado) d.confirmarOutroMilitar = true;
     }
   }
+  if (S.editando) { d.id = S.editando.id; delete d.sraiId; }
   await ocupado(btn, async () => {
     try {
-      const r = await api('cadastrarPostagem', d);
+      const r = await api(S.editando ? 'editarPostagem' : 'cadastrarPostagem', d);
       if (r.precisaConfirmar) {
         agPendente = { manter, btn };
         mostrarParecidos(r.parecidos, 'Já existe militar parecido. É um destes?', true);
@@ -1271,6 +1285,15 @@ async function salvarPostagem(manter, btn) {
         return;
       }
       agConfirmado = false; mostrarParecidos(null);
+      if (S.editando) {
+        if (r.semAlteracao) { setMsg(m, 'info', 'Nada foi alterado.'); return; }
+        if (r.preCadastro) carregarAgentes(true);
+        encerrarEdicao();
+        S.postagens = null;
+        abrirAba('postagens');
+        toast('Postagem ' + r.id + ' atualizada.');
+        return;
+      }
       recentes.unshift({ codigo: d.codigo, txt: 'Auto ' + d.numAuto + '/' + d.anoAuto + ' · ' + (tipo === 'CIENTIFICACAO' ? 'Cientificação' : 'Interna') });
       $('pp-recentes').innerHTML = recentes.slice(0, 10).map(x => '<li class="item"><div class="item-top"><span class="cod">' + esc(x.codigo) + '</span><span class="chip aguarda">Aguardando 1ª consulta</span></div><div class="meta">' + esc(x.txt) + '</div></li>').join('');
       $('pp-recentes-wrap').hidden = false;
@@ -1291,6 +1314,56 @@ async function salvarPostagem(manter, btn) {
   });
 }
 $('f-postagem').addEventListener('submit', e => { e.preventDefault(); salvarPostagem(false, $('pp-salvar')); });
+
+/* ===== Edição de postagem (reaproveita o formulário de cadastro) ===== */
+S.editando = null;
+function isoDeBr(s) { const m = String(s || '').match(/^(\d{2})\/(\d{2})\/(\d{4})/); return m ? m[3] + '-' + m[2] + '-' + m[1] : ''; }
+function limparFormularioPostagem() {
+  $('cod').value = ''; $('aut').value = ''; $('obs').value = '';
+  $('t-pi').checked = false; $('t-cp').checked = false; mudouTipo();
+  $('ag-npm').value = ''; $('ag-nome').value = ''; $('ag-pre').hidden = true; setMsg($('ag-info'), '', ''); agEncontrado = null;
+  $('ag-busca').value = ''; agSel = null; $('ag-novo').hidden = true; fecharLista(); mostrarParecidos(null);
+  agConfirmado = false; agPendente = null;
+  setMsg($('pp-msg'), '', ''); checarCodigo();
+}
+function iniciarEdicao(p) {
+  S.editando = p;
+  abrirAba('cadastrar');
+  limparFormularioPostagem();
+  $('pp-titulo').textContent = 'Editar postagem';
+  $('pp-ed-id').textContent = p.id + ' · ' + p.codigo;
+  $('pp-editando').hidden = false;
+  $('pp-outra').hidden = true;
+  $('pp-salvar').textContent = 'Salvar alterações';
+  $('pp-recentes-wrap').hidden = true;
+  const sel = $('ano');
+  if (![...sel.options].some(o => o.value === p.anoAuto)) sel.insertAdjacentHTML('beforeend', '<option>' + esc(p.anoAuto) + '</option>');
+  sel.value = p.anoAuto;
+  const finalizada = p.situacao === 'FINALIZADA';
+  $('cod').value = p.codigo; $('cod').readOnly = finalizada; $('camBtn').hidden = finalizada; $('cam-galeria').hidden = finalizada;
+  $('aut').value = p.numAuto;
+  $('dt').value = isoDeBr(p.dataPostagem) || hojeISO();
+  $('obs').value = p.obs || '';
+  $('t-cp').checked = p.tipo === 'CIENTIFICACAO'; $('t-pi').checked = p.tipo !== 'CIENTIFICACAO'; mudouTipo();
+  if (p.tipo === 'CIENTIFICACAO' && p.agenteNpm) {
+    selecionarAgente({ npm: p.agenteNpm, exibicao: p.agenteNome || ('Nº PM ' + p.agenteNpm + ' (sem cadastro)') });
+  }
+  checarCodigo();
+  if (finalizada) setMsg($('cst'), 'info', 'Postagem já entregue ou devolvida: o código de rastreio não pode mais ser trocado.');
+  scrollTo(0, 0);
+  setTimeout(() => (finalizada ? $('aut') : $('cod')).focus(), 60);
+}
+function encerrarEdicao() {
+  S.editando = null;
+  $('pp-titulo').textContent = 'Cadastrar postagem';
+  $('pp-editando').hidden = true;
+  $('pp-outra').hidden = false;
+  $('pp-salvar').textContent = 'Salvar';
+  $('cod').readOnly = false; $('camBtn').hidden = false; $('cam-galeria').hidden = false;
+  $('pp-recentes-wrap').hidden = !recentes.length;
+  limparFormularioPostagem();
+}
+$('pp-ed-cancelar').addEventListener('click', () => { encerrarEdicao(); abrirAba('postagens'); });
 $('pp-outra').addEventListener('click', () => salvarPostagem(true, $('pp-outra')));
 
 /* ===== Leitura do código de barras ===== */
