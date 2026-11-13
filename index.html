@@ -452,7 +452,9 @@ footer .wrap{padding-block:16px;border-top:1px solid var(--line)}
 const API_URL = 'https://script.google.com/macros/s/AKfycbzKaafK4R6ceWdKoKEZXUtYJszr-ru22FrvUvQ2okNab_--caOwmql8IB48EEpO9mZV/exec';
 const INATIVIDADE_MIN = 15;
 
-const POSTOS = ['Sd','Cb','3º Sgt','2º Sgt','1º Sgt','Subten','Cad','Asp','2º Ten','1º Ten','Cap','Maj','Ten Cel','Cel'];
+const POSTOS = ['Sd','Cb','3º Sgt','2º Sgt','1º Sgt','Subten','Cad','Asp','2º Ten','1º Ten','Cap','Maj','Ten Cel','Cel','ASPM'];
+// ASPM: servidor civil (assistente administrativo). Não leva "PM" depois do posto no nome.
+const prefixoPosto = p => p ? p + (p === 'ASPM' ? ' ' : ' PM ') : '';
 const RE_NPM = /^\d{3}\.\d{3}-\d$/;
 const RE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const S10 = /^[A-Z]{2}\d{9}[A-Z]{2}$/;
@@ -494,7 +496,7 @@ function nomeValido(n) {
 function dvS10(c) { const W = [8,6,4,2,3,5,9,7]; let s = 0; for (let i = 0; i < 8; i++) s += Number(c[2 + i]) * W[i]; let d = 11 - (s % 11); if (d === 10) d = 0; if (d === 11) d = 5; return d; }
 function setMsg(el, cls, txt) { el.className = 'msg ' + (cls || ''); el.textContent = txt || ''; }
 function preencherPostos(sel, comVazio) {
-  sel.innerHTML = (comVazio ? '<option value="">Escolha</option>' : '') + POSTOS.map(p => '<option>' + esc(p) + '</option>').join('');
+  sel.innerHTML = (comVazio ? '<option value="">Escolha</option>' : '') + POSTOS.map(p => '<option value="' + esc(p) + '">' + esc(p === 'ASPM' ? 'ASPM (servidor civil)' : p) + '</option>').join('');
 }
 let toastTimer = null;
 function toast(txt) {
@@ -1123,7 +1125,7 @@ $('ag-nome').addEventListener('input', () => { agConfirmado = false; });
 S.agentes = null;
 let acItens = [], acAtivo = -1, agSel = null, agCarregando = false, agFalhou = false;
 const normAg = s => semAcento(s).replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
-const rotuloAg = a => (a.posto ? a.posto + ' PM ' : '') + a.nome;
+const rotuloAg = a => prefixoPosto(a.posto) + a.nome;
 function carregarAgentes(forcar) {
   if ((S.agentes && !forcar) || agCarregando) return;
   agCarregando = true;
@@ -1162,7 +1164,7 @@ function abrirLista(itens, txt) {
   const soNumeros = /^[\d .\-]+$/.test(txt.trim());
   $('ag-lista').innerHTML = itens.map((a, i) =>
     '<li role="option" data-i="' + i + '" aria-selected="' + (i === acAtivo) + '"><span class="ac-nome">' +
-    (a.posto ? esc(a.posto) + ' PM ' : '') + (soNumeros ? esc(a.nome) : destacar(a.nome, txt)) +
+    esc(prefixoPosto(a.posto)) + (soNumeros ? esc(a.nome) : destacar(a.nome, txt)) +
     '</span><span class="ac-npm">' + esc(a.npm) + '</span></li>').join('') +
     '<li role="option" data-i="novo" class="ac-novo" aria-selected="' + (acAtivo < 0) + '">Não está na lista: cadastrar agente novo</li>';
   if (acAtivo < 0) acAtivo = itens.length;
