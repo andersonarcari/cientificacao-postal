@@ -49,6 +49,11 @@ input[readonly]{background:var(--bg);color:var(--muted)}
 input[type=checkbox],input[type=radio]{width:auto;height:auto}
 :focus-visible{outline:2px solid var(--caqui);outline-offset:2px}
 .mono{font-family:var(--f-mono);letter-spacing:.06em}
+.gaia{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px 16px;margin:4px 0 0;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.gaia div{min-width:0}
+.gaia dt{font-family:var(--f-display);font-weight:500;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.gaia dd{margin:2px 0 0;font-weight:600;overflow-wrap:anywhere}
+.gaia-tit{font-family:var(--f-display);font-weight:600;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:8px 0 0}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
 .grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:0 18px;border-radius:8px;font-family:var(--f-display);font-weight:600;font-size:16px;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
@@ -291,10 +296,9 @@ footer .wrap{padding-block:16px;border-top:1px solid var(--line)}
           <p class="note" id="cam-galeria">A câmera não abriu? <label for="foto2" class="btn link">Escolha uma foto da galeria</label>.</p>
         </div>
 
-        <div class="grid3">
+        <div class="grid2">
           <div class="field"><label class="lbl" for="aut">Número do auto</label><input id="aut" inputmode="numeric" autocomplete="off" placeholder="102030"></div>
           <div class="field"><label class="lbl" for="ano">Ano do auto</label><select id="ano"></select></div>
-          <div class="field"><label class="lbl" for="dt">Data da postagem</label><input id="dt" type="date"></div>
         </div>
 
         <fieldset class="field" style="border:0;margin:0;padding:0">
@@ -508,10 +512,24 @@ async function ocupado(btn, fn) {
   try { return await fn(); } finally { btn.disabled = false; btn.innerHTML = txt; }
 }
 function hojeISO() { const d = new Date(), p = n => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); }
-function copiar(txt) {
-  const fallback = () => { const i = document.createElement('input'); i.value = txt; document.body.appendChild(i); i.select(); try { document.execCommand('copy'); toast('Data copiada: ' + txt); } catch (e) { toast('Copie manualmente: ' + txt); } i.remove(); };
-  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(() => toast('Data copiada: ' + txt)).catch(fallback);
-  else fallback();
+/* Data do envio: a oficial vem do robô (evento "Objeto postado" nos Correios). */
+function textoEnvio(p) {
+  if (p.dataPostagemCorreios) return 'Postada em ' + esc(p.dataPostagemCorreios);
+  if (p.dataPostagem) return 'Postada em ' + esc(p.dataPostagem) + ' (informada pela SRAI)';
+  return 'Data do envio: aguardando consulta';
+}
+/* Bloco com os campos na mesma ordem da tela do GAIA Fiscalização. */
+function blocoGaia(p) {
+  const entregue = p.status === 'Entregue';
+  const envio = p.dataPostagemCorreios || (p.dataPostagem ? p.dataPostagem + ' (SRAI)' : 'aguardando consulta');
+  const campo = (rot, val, cls) => '<div><dt>' + rot + '</dt><dd' + (cls ? ' class="' + cls + '"' : '') + '>' + val + '</dd></div>';
+  return '<p class="gaia-tit">Dados para o GAIA</p><dl class="gaia">' +
+    campo('Data do envio', esc(envio)) +
+    campo('Código de rastreamento', esc(p.codigo), 'mono') +
+    campo('Correspondência entregue?', entregue ? 'Sim' : 'Não (devolvida)') +
+    campo(entregue ? 'Data do recebimento' : 'Data da devolução', esc(p.dataEntrega)) +
+    campo('Comprovante de entrega', p.temArquivo ? 'Baixe no botão abaixo' : 'PDF ainda não disponível') +
+    '</dl>';
 }
 function baixarBase64(nome, mime, b64) {
   const bin = atob(b64), u8 = new Uint8Array(bin.length);
@@ -777,7 +795,7 @@ function renderPostagens() {
 function itemPostagem(p) {
   const tipo = p.tipo === 'CIENTIFICACAO' ? 'Cientificação' : 'Interna';
   const linha1 = 'Auto <strong>' + esc(p.numAuto) + '/' + esc(p.anoAuto) + '</strong> · ' + tipo + (p.agenteNome ? ' · ' + esc(p.agenteNome) : '');
-  const partes = ['Postada em ' + esc(p.dataPostagem)];
+  const partes = [textoEnvio(p)];
   if (p.dataEntrega) partes.push((p.status === 'Devolvido' ? 'Devolvida em ' : 'Entregue em ') + '<strong>' + esc(p.dataEntrega) + '</strong>');
   else if (p.ultimaConsulta) partes.push('Última consulta ' + esc(p.ultimaConsulta.slice(0, 16)));
   if (p.tipo === 'CIENTIFICACAO' && p.dataEntrega && p.status === 'Entregue') partes.push(p.lancadoGaia ? 'Lançado no GAIA' : '<strong>Falta lançar no GAIA</strong>');
@@ -807,8 +825,6 @@ async function acaoItem(e, lista) {
       try { const r = await api('baixarComprovante', { id: p.id }); baixarBase64(r.nome, r.mime, r.base64); }
       catch (err) { toast(err.message); }
     });
-  } else if (act === 'copiar') {
-    copiar(p.dataEntrega);
   } else if (act === 'cancelar') {
     if (!confirm('Cancelar a postagem ' + p.codigo + ' (auto ' + p.numAuto + '/' + p.anoAuto + ')?\nEla sai da fila do robô e não pode ser reaberta.')) return;
     const motivo = prompt('Motivo do cancelamento (opcional):', '') || '';
@@ -842,17 +858,17 @@ function renderMinhas() {
   if (!lista.length) { $('m-lista').innerHTML = '<li class="vazio">Nenhuma cientificação no seu Nº PM por enquanto. Quando uma SRAI cadastrar a cientificação de um auto seu, ela aparece aqui.</li>'; return; }
   $('m-lista').innerHTML = lista.map(p => {
     const acts = [];
-    if (p.dataEntrega) acts.push('<button type="button" class="btn small" data-act="copiar" data-id="' + esc(p.id) + '">Copiar data</button>');
     if (p.temArquivo) acts.push('<button type="button" class="btn small" data-act="baixar" data-id="' + esc(p.id) + '">Baixar comprovante</button>');
     if (p.status === 'Entregue' && p.dataEntrega) {
       acts.push(p.lancadoGaia
         ? '<button type="button" class="btn small" data-act="desfazer" data-id="' + esc(p.id) + '">Desfazer lançamento</button>'
         : '<button type="button" class="btn small primary" data-act="lancado" data-id="' + esc(p.id) + '">Marcar como lançado no GAIA</button>');
     }
-    const entrega = p.dataEntrega ? (p.status === 'Devolvido' ? 'Devolvida em ' : 'Entregue em ') + '<strong>' + esc(p.dataEntrega) + '</strong>' : 'Postada em ' + esc(p.dataPostagem);
+    const entrega = p.dataEntrega ? (p.status === 'Devolvido' ? 'Devolvida em ' : 'Entregue em ') + '<strong>' + esc(p.dataEntrega) + '</strong>' : textoEnvio(p);
     const gaia = p.lancadoGaia ? ' · Lançado no GAIA em ' + esc(String(p.lancadoGaiaEm).slice(0, 10)) : '';
     return '<li class="item' + (pendenteGaia(p) ? ' destaque' : '') + '"><div class="item-top"><span>Auto <strong>' + esc(p.numAuto) + '/' + esc(p.anoAuto) + '</strong></span><span class="chip ' + classeStatus(p) + '">' + esc(rotuloStatus(p)) + '</span></div>' +
       '<div class="meta">' + entrega + gaia + '</div><div class="meta"><span class="mono">' + esc(p.codigo) + '</span> · ' + esc(p.sraiNome) + '</div>' +
+      (p.dataEntrega ? blocoGaia(p) : '') +
       (acts.length ? '<div class="item-acts">' + acts.join('') + '</div>' : '') + '</li>';
   }).join('');
 }
@@ -1056,8 +1072,6 @@ function prepararCadastro() {
   const ano = new Date().getFullYear(), sel = $('ano'), atual = sel.value;
   sel.innerHTML = [0, 1, 2, 3, 4].map(i => '<option>' + (ano - i) + '</option>').join('');
   if (atual) sel.value = atual;
-  if (!$('dt').value) $('dt').value = hojeISO();
-  $('dt').max = hojeISO();
   if (!S.postagens) api('listarPostagens', { sraiId: S.srai }).then(r => { S.postagens = r.postagens.sort((a, b) => b.id.localeCompare(a.id)); }).catch(() => {});
   carregarAgentes(true);
   mostrarRecentes();
@@ -1264,8 +1278,7 @@ async function salvarPostagem(manter, btn) {
   if (estado !== 'ok') { setMsg(m, 'bad', $('cod').value ? 'Corrija o código de rastreio.' : 'Informe o código de rastreio.'); return; }
   if (!$('aut').value) return setMsg(m, 'bad', 'Informe o número do auto.');
   const tipo = tipoSel(); if (!tipo) return setMsg(m, 'bad', 'Escolha o tipo de postagem.');
-  if (!$('dt').value) return setMsg(m, 'bad', 'Informe a data da postagem.');
-  const d = { sraiId: S.srai, codigo: $('cod').value, numAuto: $('aut').value, anoAuto: $('ano').value, dataPostagem: $('dt').value, tipo, obs: $('obs').value.trim() };
+  const d = { sraiId: S.srai, codigo: $('cod').value, numAuto: $('aut').value, anoAuto: $('ano').value, tipo, obs: $('obs').value.trim() };
   if (tipo === 'CIENTIFICACAO') {
     d.agenteNpm = $('ag-npm').value;
     if (!RE_NPM.test(d.agenteNpm)) return setMsg(m, 'bad', $('ag-novo').hidden ? 'Escolha o agente autuador na lista ou cadastre um agente novo.' : 'Informe o Nº PM do agente no formato 000.000-0.');
@@ -1344,7 +1357,6 @@ function iniciarEdicao(p) {
   const finalizada = p.situacao === 'FINALIZADA';
   $('cod').value = p.codigo; $('cod').readOnly = finalizada; $('camBtn').hidden = finalizada; $('cam-galeria').hidden = finalizada;
   $('aut').value = p.numAuto;
-  $('dt').value = isoDeBr(p.dataPostagem) || hojeISO();
   $('obs').value = p.obs || '';
   $('t-cp').checked = p.tipo === 'CIENTIFICACAO'; $('t-pi').checked = p.tipo !== 'CIENTIFICACAO'; mudouTipo();
   if (p.tipo === 'CIENTIFICACAO' && p.agenteNpm) {
