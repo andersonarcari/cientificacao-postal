@@ -526,9 +526,11 @@ function blocoGaia(p) {
   return '<p class="gaia-tit">Dados para o GAIA</p><dl class="gaia">' +
     campo('Data do envio', esc(envio)) +
     campo('Código de rastreamento', esc(p.codigo), 'mono') +
-    campo('Correspondência entregue?', entregue ? 'Sim' : 'Não (devolvida)') +
-    campo(entregue ? 'Data do recebimento' : 'Data da devolução', esc(p.dataEntrega)) +
-    campo('Comprovante de entrega', p.temArquivo ? 'Baixe no botão abaixo' : 'PDF ainda não disponível') +
+    (entregue
+      ? campo('Correspondência entregue?', 'Sim') +
+        campo('Data do recebimento', esc(p.dataEntrega)) +
+        campo('Comprovante de entrega', p.temArquivo ? 'Baixe no botão abaixo' : 'PDF ainda não disponível')
+      : '') + // devolvida: o GAIA pede só a data do envio e o código
     '</dl>';
 }
 function baixarBase64(nome, mime, b64) {
