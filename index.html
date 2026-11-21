@@ -53,6 +53,13 @@ input[type=checkbox],input[type=radio]{width:auto;height:auto}
 .gaia div{min-width:0}
 .gaia dt{font-family:var(--f-display);font-weight:500;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 .gaia dd{margin:2px 0 0;font-weight:600;overflow-wrap:anywhere}
+.tent{display:flex;flex-direction:column;gap:4px;padding:10px 12px;border:2px solid var(--bad);border-radius:8px;background:var(--bad-soft)}
+.tent strong{font-family:var(--f-display);font-weight:700;font-size:15px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink)}
+.tent span{color:var(--bad);font-weight:600}
+.tent em{font-style:normal;font-size:13px;color:var(--ok);font-weight:600}
+.tent.ok{border-color:var(--line);background:var(--bg)}
+.tent.ok span{color:var(--muted);font-weight:400}
+.etq{color:var(--bad);font-weight:600}
 .gaia-tit{font-family:var(--f-display);font-weight:600;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:8px 0 0}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
 .grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
@@ -308,6 +315,16 @@ footer .wrap{padding-block:16px;border-top:1px solid var(--line)}
             <label class="tipo"><input type="radio" name="tipo" id="t-cp" value="CIENTIFICACAO"><span><strong>Cientificação postal</strong><em>Visível também ao agente autuador</em></span></label>
           </div>
         </fieldset>
+
+        <div class="field" id="tent-wrap" hidden>
+          <label class="lbl" for="tent">Tentativa anterior</label>
+          <select id="tent">
+            <option value="">1ª cientificação (nenhuma tentativa anterior)</option>
+            <option value="EMAIL">Cientificação por e-mail frustrada</option>
+            <option value="POSTAL1">2ª tentativa postal (a 1ª carta foi devolvida)</option>
+          </select>
+          <p class="msg" id="tent-msg" role="status"></p>
+        </div>
 
         <div class="field" id="ag-wrap" hidden>
           <label class="lbl" for="ag-busca">Agente autuador</label>
@@ -755,6 +772,29 @@ function grupo(p) {
   return 'andamento';
 }
 function pendenteGaia(p) { return p.tipo === 'CIENTIFICACAO' && p.status === 'Entregue' && !p.lancadoGaia && p.situacao !== 'CANCELADA'; }
+/* Tentativas de cientificação frustradas. A etapa vem do servidor:
+   EMAIL (marcada no cadastro), POSTAL1 (1ª carta devolvida) e POSTAL2 (2ª carta devolvida). */
+const TENT = {
+  EMAIL: { titulo: 'Cientificação por e-mail frustrada', curto: 'E-mail frustrado',
+    instrucao: 'Gere uma nova cientificação postal para este auto no GAIA e finalize com os dados da entrega ou devolução.' },
+  POSTAL1: { titulo: '1ª tentativa de cientificação postal frustrada', curto: '1ª tentativa postal frustrada',
+    instrucao: 'Preencha no GAIA os dados da devolução, gere uma nova cientificação postal para este auto e finalize com os dados da entrega ou devolução.' },
+  POSTAL2: { titulo: '2ª tentativa de cientificação postal frustrada', curto: '2ª tentativa postal frustrada · edital',
+    instrucao: 'Preencha no GAIA os dados da devolução, gere uma nova cientificação por edital para este auto e finalize com os dados quando ocorrer a publicação.' }
+};
+function pendenteTent(p) { return !!TENT[p.etapa] && !p.novaCientOk && p.situacao !== 'CANCELADA'; }
+function pendente(p) { return pendenteGaia(p) || pendenteTent(p); }
+function faixaTentativa(p) {
+  const e = TENT[p.etapa]; if (!e) return '';
+  const feito = p.etapa === 'POSTAL2' ? 'Edital gerado no GAIA' : 'Nova cientificação gerada no GAIA';
+  return '<div class="tent' + (p.novaCientOk ? ' ok' : '') + '"><strong>' + e.titulo + '</strong><span>' + e.instrucao + '</span>' +
+    (p.novaCientOk ? '<em>✓ ' + feito + (p.novaCientOkEm ? ' em ' + esc(String(p.novaCientOkEm).slice(0, 10)) : '') + '</em>' : '') + '</div>';
+}
+function etiquetaTentativa(p) {
+  if (TENT[p.etapa]) return ' · <span class="etq">' + TENT[p.etapa].curto + (pendenteTent(p) ? ' (agente ainda não marcou)' : '') + '</span>';
+  if (p.tentativa === 'POSTAL1') return ' · 2ª tentativa postal';
+  return '';
+}
 
 /* ===== Postagens da SRAI ===== */
 async function carregarPostagens() {
@@ -774,14 +814,14 @@ const CARDS = [['andamento', 'Em andamento'], ['entregues', 'Entregues'], ['devo
 function renderPostagens() {
   const todas = S.postagens || [];
   const conta = { andamento: 0, entregues: 0, devolvidas: 0, verificar: 0, gaia: 0 };
-  todas.forEach(p => { const g = grupo(p); if (conta[g] !== undefined) conta[g]++; if (pendenteGaia(p)) conta.gaia++; });
+  todas.forEach(p => { const g = grupo(p); if (conta[g] !== undefined) conta[g]++; if (pendente(p)) conta.gaia++; });
   $('counters').innerHTML = CARDS.map(c => '<button type="button" class="counter' + (c[0] === 'gaia' ? ' gaia' : '') + '" data-card="' + c[0] + '" aria-pressed="' + (S.filtroCard === c[0]) + '"><b>' + conta[c[0]] + '</b><span>' + esc(c[1]) + '</span></button>').join('');
 
   const busca = $('busca').value.trim().toUpperCase().replace(/\s/g, '');
   const tipo = $('fTipo').value, ano = $('fAno').value, canceladas = $('fCanceladas').checked;
   const lista = todas.filter(p => {
     if (!canceladas && p.situacao === 'CANCELADA') return false;
-    if (S.filtroCard === 'gaia' ? !pendenteGaia(p) : (S.filtroCard && grupo(p) !== S.filtroCard)) return false;
+    if (S.filtroCard === 'gaia' ? !pendente(p) : (S.filtroCard && grupo(p) !== S.filtroCard)) return false;
     if (tipo && p.tipo !== tipo) return false;
     if (ano && p.anoAuto !== ano) return false;
     if (busca && p.codigo.indexOf(busca) < 0 && p.numAuto.indexOf(soDigitos(busca) || '#') < 0) return false;
@@ -796,7 +836,7 @@ function renderPostagens() {
 }
 function itemPostagem(p) {
   const tipo = p.tipo === 'CIENTIFICACAO' ? 'Cientificação' : 'Interna';
-  const linha1 = 'Auto <strong>' + esc(p.numAuto) + '/' + esc(p.anoAuto) + '</strong> · ' + tipo + (p.agenteNome ? ' · ' + esc(p.agenteNome) : '');
+  const linha1 = 'Auto <strong>' + esc(p.numAuto) + '/' + esc(p.anoAuto) + '</strong> · ' + tipo + (p.agenteNome ? ' · ' + esc(p.agenteNome) : '') + etiquetaTentativa(p);
   const partes = [textoEnvio(p)];
   if (p.dataEntrega) partes.push((p.status === 'Devolvido' ? 'Devolvida em ' : 'Entregue em ') + '<strong>' + esc(p.dataEntrega) + '</strong>');
   else if (p.ultimaConsulta) partes.push('Última consulta ' + esc(p.ultimaConsulta.slice(0, 16)));
@@ -805,7 +845,7 @@ function itemPostagem(p) {
   if (p.situacao !== 'CANCELADA') acts.push('<button type="button" class="btn small" data-act="editar" data-id="' + esc(p.id) + '">Editar</button>');
   if (p.temArquivo) acts.push('<button type="button" class="btn small" data-act="baixar" data-id="' + esc(p.id) + '">Baixar comprovante</button>');
   if (p.situacao === 'ABERTA') acts.push('<button type="button" class="btn small" data-act="cancelar" data-id="' + esc(p.id) + '">Cancelar</button>');
-  return '<li class="item' + (pendenteGaia(p) ? ' destaque' : '') + '"><div class="item-top"><span class="cod">' + esc(p.codigo) + '</span><span class="chip ' + classeStatus(p) + '">' + esc(rotuloStatus(p)) + '</span></div>' +
+  return '<li class="item' + (pendente(p) ? ' destaque' : '') + '"><div class="item-top"><span class="cod">' + esc(p.codigo) + '</span><span class="chip ' + classeStatus(p) + '">' + esc(rotuloStatus(p)) + '</span></div>' +
     '<div class="meta">' + linha1 + '</div><div class="meta">' + partes.join(' · ') + '</div>' +
     (p.obs ? '<div class="meta">Obs.: ' + esc(p.obs) + '</div>' : '') +
     (acts.length ? '<div class="item-acts">' + acts.join('') + '</div>' : '') + '</li>';
@@ -826,6 +866,16 @@ async function acaoItem(e, lista) {
     ocupado(b, async () => {
       try { const r = await api('baixarComprovante', { id: p.id }); baixarBase64(r.nome, r.mime, r.base64); }
       catch (err) { toast(err.message); }
+    });
+  } else if (act === 'novacient' || act === 'desfazer-nc') {
+    const valor = act === 'novacient';
+    ocupado(b, async () => {
+      try {
+        const r = await api('marcarNovaCient', { id: p.id, valor });
+        p.novaCientOk = r.novaCientOk; p.novaCientOkEm = r.novaCientOkEm;
+        renderMinhas(); toast(valor ? 'Marcado: nova cientificação gerada no GAIA.' : 'Marcação desfeita.');
+        if (S.postagens) { const q = S.postagens.find(x => x.id === p.id); if (q) { q.novaCientOk = p.novaCientOk; q.novaCientOkEm = p.novaCientOkEm; } }
+      } catch (err) { toast(err.message); }
     });
   } else if (act === 'cancelar') {
     if (!confirm('Cancelar a postagem ' + p.codigo + ' (auto ' + p.numAuto + '/' + p.anoAuto + ')?\nEla sai da fila do robô e não pode ser reaberta.')) return;
@@ -854,12 +904,20 @@ async function carregarMinhas() {
   catch (err) { setMsg($('m-msg'), 'bad', err.message); }
 }
 function renderMinhas() {
-  const lista = (S.minhas || []).slice().sort((a, b) => (pendenteGaia(b) - pendenteGaia(a)) || b.id.localeCompare(a.id));
-  const pend = lista.filter(pendenteGaia).length;
-  setMsg($('m-msg'), pend ? 'warn' : 'info', lista.length ? (pend ? pend + (pend === 1 ? ' entrega falta' : ' entregas faltam') + ' lançar no GAIA.' : 'Nada pendente de lançamento no GAIA.') : '');
+  const lista = (S.minhas || []).slice().sort((a, b) => (pendente(b) - pendente(a)) || b.id.localeCompare(a.id));
+  const pend = lista.filter(pendenteGaia).length, pendT = lista.filter(pendenteTent).length;
+  const avisos = [];
+  if (pendT) avisos.push(pendT + (pendT === 1 ? ' auto precisa' : ' autos precisam') + ' de nova cientificação no GAIA');
+  if (pend) avisos.push(pend + (pend === 1 ? ' entrega falta' : ' entregas faltam') + ' lançar no GAIA');
+  setMsg($('m-msg'), avisos.length ? 'warn' : 'info', lista.length ? (avisos.length ? avisos.join(' · ') + '.' : 'Nada pendente no GAIA.') : '');
   if (!lista.length) { $('m-lista').innerHTML = '<li class="vazio">Nenhuma cientificação no seu Nº PM por enquanto. Quando uma SRAI cadastrar a cientificação de um auto seu, ela aparece aqui.</li>'; return; }
   $('m-lista').innerHTML = lista.map(p => {
     const acts = [];
+    if (TENT[p.etapa]) {
+      acts.push(p.novaCientOk
+        ? '<button type="button" class="btn small" data-act="desfazer-nc" data-id="' + esc(p.id) + '">Desfazer marcação</button>'
+        : '<button type="button" class="btn small primary" data-act="novacient" data-id="' + esc(p.id) + '">' + (p.etapa === 'POSTAL2' ? 'Marcar edital gerado no GAIA' : 'Marcar nova cientificação gerada no GAIA') + '</button>');
+    }
     if (p.temArquivo) acts.push('<button type="button" class="btn small" data-act="baixar" data-id="' + esc(p.id) + '">Baixar comprovante</button>');
     if (p.status === 'Entregue' && p.dataEntrega) {
       acts.push(p.lancadoGaia
@@ -868,7 +926,8 @@ function renderMinhas() {
     }
     const entrega = p.dataEntrega ? (p.status === 'Devolvido' ? 'Devolvida em ' : 'Entregue em ') + '<strong>' + esc(p.dataEntrega) + '</strong>' : textoEnvio(p);
     const gaia = p.lancadoGaia ? ' · Lançado no GAIA em ' + esc(String(p.lancadoGaiaEm).slice(0, 10)) : '';
-    return '<li class="item' + (pendenteGaia(p) ? ' destaque' : '') + '"><div class="item-top"><span>Auto <strong>' + esc(p.numAuto) + '/' + esc(p.anoAuto) + '</strong></span><span class="chip ' + classeStatus(p) + '">' + esc(rotuloStatus(p)) + '</span></div>' +
+    return '<li class="item' + (pendente(p) ? ' destaque' : '') + '"><div class="item-top"><span>Auto <strong>' + esc(p.numAuto) + '/' + esc(p.anoAuto) + '</strong></span><span class="chip ' + classeStatus(p) + '">' + esc(rotuloStatus(p)) + '</span></div>' +
+      faixaTentativa(p) +
       '<div class="meta">' + entrega + gaia + '</div><div class="meta"><span class="mono">' + esc(p.codigo) + '</span> · ' + esc(p.sraiNome) + '</div>' +
       (p.dataEntrega ? blocoGaia(p) : '') +
       (acts.length ? '<div class="item-acts">' + acts.join('') + '</div>' : '') + '</li>';
@@ -1094,7 +1153,27 @@ $('cod').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDe
 $('aut').addEventListener('input', e => { e.target.value = soDigitos(e.target.value); });
 $('aut').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); salvarPostagem(true, $('pp-outra')); } });
 function tipoSel() { return $('t-cp').checked ? 'CIENTIFICACAO' : $('t-pi').checked ? 'INTERNA' : ''; }
-function mudouTipo() { $('ag-wrap').hidden = tipoSel() !== 'CIENTIFICACAO'; }
+function mudouTipo() { const c = tipoSel() !== 'CIENTIFICACAO'; $('ag-wrap').hidden = c; $('tent-wrap').hidden = c; sugerirTentativa(); }
+/* Se o auto já tem carta devolvida nesta SRAI, esta é a 2ª tentativa postal. */
+function sugerirTentativa() {
+  const msg = $('tent-msg'); S.tentAnterior = '';
+  if (tipoSel() !== 'CIENTIFICACAO' || !$('aut').value) { setMsg(msg, '', ''); return; }
+  const ed = S.editando ? S.editando.id : '';
+  const dev = (S.postagens || []).filter(x => x.id !== ed && x.tipo === 'CIENTIFICACAO' && x.situacao !== 'CANCELADA' &&
+    x.numAuto === $('aut').value && x.anoAuto === $('ano').value && x.status === 'Devolvido');
+  if (!dev.length) { setMsg(msg, '', ''); return; }
+  if (dev.length >= 2 || dev.some(x => x.tentativa === 'POSTAL1')) {
+    setMsg(msg, 'bad', 'Este auto já teve 2 cartas devolvidas (' + dev.map(x => x.codigo).join(', ') + '). O próximo passo é a cientificação por edital, não uma nova carta.');
+    return;
+  }
+  S.tentAnterior = dev[0].id;
+  if (!S.editando && $('tent').value !== 'POSTAL1') {
+    $('tent').value = 'POSTAL1';
+    setMsg(msg, 'warn', 'Este auto já tem uma carta devolvida (' + dev[0].codigo + '). Marcamos "2ª tentativa postal". Confira.');
+  } else setMsg(msg, 'info', 'Carta anterior devolvida: ' + dev[0].codigo + '.');
+}
+$('aut').addEventListener('input', sugerirTentativa);
+$('ano').addEventListener('change', sugerirTentativa);
 $('t-pi').addEventListener('change', mudouTipo); $('t-cp').addEventListener('change', mudouTipo);
 let agBusca = 0, agEncontrado = null, agConfirmado = false, agPendente = null;
 function mostrarParecidos(lista, titulo, comOutro) {
@@ -1283,6 +1362,8 @@ async function salvarPostagem(manter, btn) {
   const d = { sraiId: S.srai, codigo: $('cod').value, numAuto: $('aut').value, anoAuto: $('ano').value, tipo, obs: $('obs').value.trim() };
   if (tipo === 'CIENTIFICACAO') {
     d.agenteNpm = $('ag-npm').value;
+    d.tentativa = $('tent').value;
+    if (d.tentativa === 'POSTAL1' && S.tentAnterior && !S.editando) d.postagemAnterior = S.tentAnterior;
     if (!RE_NPM.test(d.agenteNpm)) return setMsg(m, 'bad', $('ag-novo').hidden ? 'Escolha o agente autuador na lista ou cadastre um agente novo.' : 'Informe o Nº PM do agente no formato 000.000-0.');
     if (agEncontrado === false) {
       d.agenteNome = $('ag-nome').value.trim().replace(/\s+/g, ' ').toUpperCase(); d.agentePosto = $('ag-posto').value;
@@ -1316,7 +1397,7 @@ async function salvarPostagem(manter, btn) {
       $('pp-recentes-wrap').hidden = false;
       if (S.postagens) S.postagens = null;
       setMsg(m, r.aviso ? 'warn' : 'ok', 'Postagem salva (' + r.id + ').' + (r.preCadastro ? ' O agente ficou pré-cadastrado.' : '') + (r.aviso ? ' ' + r.aviso : ''));
-      $('cod').value = ''; $('aut').value = ''; $('obs').value = ''; checarCodigo();
+      $('cod').value = ''; $('aut').value = ''; $('obs').value = ''; $('tent').value = ''; setMsg($('tent-msg'), '', ''); checarCodigo();
       if (!manter) {
         $('t-pi').checked = false; $('t-cp').checked = false; mudouTipo();
         $('ag-npm').value = ''; $('ag-nome').value = ''; $('ag-pre').hidden = true; setMsg($('ag-info'), '', ''); agEncontrado = null;
@@ -1336,7 +1417,7 @@ $('f-postagem').addEventListener('submit', e => { e.preventDefault(); salvarPost
 S.editando = null;
 function isoDeBr(s) { const m = String(s || '').match(/^(\d{2})\/(\d{2})\/(\d{4})/); return m ? m[3] + '-' + m[2] + '-' + m[1] : ''; }
 function limparFormularioPostagem() {
-  $('cod').value = ''; $('aut').value = ''; $('obs').value = '';
+  $('cod').value = ''; $('aut').value = ''; $('obs').value = ''; $('tent').value = ''; setMsg($('tent-msg'), '', '');
   $('t-pi').checked = false; $('t-cp').checked = false; mudouTipo();
   $('ag-npm').value = ''; $('ag-nome').value = ''; $('ag-pre').hidden = true; setMsg($('ag-info'), '', ''); agEncontrado = null;
   $('ag-busca').value = ''; agSel = null; $('ag-novo').hidden = true; fecharLista(); mostrarParecidos(null);
@@ -1360,6 +1441,7 @@ function iniciarEdicao(p) {
   $('cod').value = p.codigo; $('cod').readOnly = finalizada; $('camBtn').hidden = finalizada; $('cam-galeria').hidden = finalizada;
   $('aut').value = p.numAuto;
   $('obs').value = p.obs || '';
+  $('tent').value = p.tentativa || '';
   $('t-cp').checked = p.tipo === 'CIENTIFICACAO'; $('t-pi').checked = p.tipo !== 'CIENTIFICACAO'; mudouTipo();
   if (p.tipo === 'CIENTIFICACAO' && p.agenteNpm) {
     selecionarAgente({ npm: p.agenteNpm, exibicao: p.agenteNome || ('Nº PM ' + p.agenteNpm + ' (sem cadastro)') });
