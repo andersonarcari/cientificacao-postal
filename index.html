@@ -60,6 +60,7 @@ input[type=checkbox],input[type=radio]{width:auto;height:auto}
 .tent.ok{border-color:var(--line);background:var(--bg)}
 .tent.ok span{color:var(--muted);font-weight:400}
 .etq{color:var(--bad);font-weight:600}
+.btn.perigo{color:var(--bad);border-color:var(--bad)}
 .gaia-tit{font-family:var(--f-display);font-weight:600;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:8px 0 0}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
 .grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
@@ -317,11 +318,12 @@ footer .wrap{padding-block:16px;border-top:1px solid var(--line)}
         </fieldset>
 
         <div class="field" id="tent-wrap" hidden>
-          <label class="lbl" for="tent">Tentativa anterior</label>
+          <label class="lbl" for="tent">Situação da cientificação</label>
           <select id="tent">
             <option value="">1ª cientificação (nenhuma tentativa anterior)</option>
             <option value="EMAIL">Cientificação por e-mail frustrada</option>
             <option value="POSTAL1">2ª tentativa postal (a 1ª carta foi devolvida)</option>
+            <option value="SEMGERAR">Agente ainda não gerou a cientificação postal no GAIA</option>
           </select>
           <p class="msg" id="tent-msg" role="status"></p>
         </div>
@@ -775,6 +777,8 @@ function pendenteGaia(p) { return p.tipo === 'CIENTIFICACAO' && p.status === 'En
 /* Tentativas de cientificação frustradas. A etapa vem do servidor:
    EMAIL (marcada no cadastro), POSTAL1 (1ª carta devolvida) e POSTAL2 (2ª carta devolvida). */
 const TENT = {
+  SEMGERAR: { titulo: 'Cientificação postal não gerada no GAIA', curto: 'Cientificação não gerada no GAIA',
+    instrucao: 'Gere a cientificação postal deste auto no GAIA e finalize com os dados da entrega ou devolução.' },
   EMAIL: { titulo: 'Cientificação por e-mail frustrada', curto: 'E-mail frustrado',
     instrucao: 'Gere uma nova cientificação postal para este auto no GAIA e finalize com os dados da entrega ou devolução.' },
   POSTAL1: { titulo: '1ª tentativa de cientificação postal frustrada', curto: '1ª tentativa postal frustrada',
@@ -786,7 +790,7 @@ function pendenteTent(p) { return !!TENT[p.etapa] && !p.novaCientOk && p.situaca
 function pendente(p) { return pendenteGaia(p) || pendenteTent(p); }
 function faixaTentativa(p) {
   const e = TENT[p.etapa]; if (!e) return '';
-  const feito = p.etapa === 'POSTAL2' ? 'Edital gerado no GAIA' : 'Nova cientificação gerada no GAIA';
+  const feito = p.etapa === 'POSTAL2' ? 'Edital gerado no GAIA' : p.etapa === 'SEMGERAR' ? 'Cientificação gerada no GAIA' : 'Nova cientificação gerada no GAIA';
   return '<div class="tent' + (p.novaCientOk ? ' ok' : '') + '"><strong>' + e.titulo + '</strong><span>' + e.instrucao + '</span>' +
     (p.novaCientOk ? '<em>✓ ' + feito + (p.novaCientOkEm ? ' em ' + esc(String(p.novaCientOkEm).slice(0, 10)) : '') + '</em>' : '') + '</div>';
 }
@@ -845,6 +849,7 @@ function itemPostagem(p) {
   if (p.situacao !== 'CANCELADA') acts.push('<button type="button" class="btn small" data-act="editar" data-id="' + esc(p.id) + '">Editar</button>');
   if (p.temArquivo) acts.push('<button type="button" class="btn small" data-act="baixar" data-id="' + esc(p.id) + '">Baixar comprovante</button>');
   if (p.situacao === 'ABERTA') acts.push('<button type="button" class="btn small" data-act="cancelar" data-id="' + esc(p.id) + '">Cancelar</button>');
+  acts.push('<button type="button" class="btn small perigo" data-act="excluir" data-id="' + esc(p.id) + '">Apagar</button>');
   return '<li class="item' + (pendente(p) ? ' destaque' : '') + '"><div class="item-top"><span class="cod">' + esc(p.codigo) + '</span><span class="chip ' + classeStatus(p) + '">' + esc(rotuloStatus(p)) + '</span></div>' +
     '<div class="meta">' + linha1 + '</div><div class="meta">' + partes.join(' · ') + '</div>' +
     (p.obs ? '<div class="meta">Obs.: ' + esc(p.obs) + '</div>' : '') +
@@ -875,6 +880,19 @@ async function acaoItem(e, lista) {
         p.novaCientOk = r.novaCientOk; p.novaCientOkEm = r.novaCientOkEm;
         renderMinhas(); toast(valor ? 'Marcado: nova cientificação gerada no GAIA.' : 'Marcação desfeita.');
         if (S.postagens) { const q = S.postagens.find(x => x.id === p.id); if (q) { q.novaCientOk = p.novaCientOk; q.novaCientOkEm = p.novaCientOkEm; } }
+      } catch (err) { toast(err.message); }
+    });
+  } else if (act === 'excluir') {
+    const tipoTxt = p.tipo === 'CIENTIFICACAO' ? 'cientificação' : 'postagem interna';
+    if (!confirm('Apagar DEFINITIVAMENTE a ' + tipoTxt + ' ' + p.codigo + ' (auto ' + p.numAuto + '/' + p.anoAuto + ')?\n\n' +
+      'Ela some do painel da SRAI e do agente autuador e não pode ser recuperada.\n' +
+      'Use apenas para cadastro errado ou em duplicidade. Para só parar o rastreio, use "Cancelar".')) return;
+    ocupado(b, async () => {
+      try {
+        await api('excluirPostagem', { id: p.id });
+        S.postagens = (S.postagens || []).filter(x => x.id !== p.id);
+        if (S.minhas) S.minhas = S.minhas.filter(x => x.id !== p.id);
+        renderPostagens(); toast('Postagem ' + p.codigo + ' apagada.');
       } catch (err) { toast(err.message); }
     });
   } else if (act === 'cancelar') {
@@ -916,7 +934,7 @@ function renderMinhas() {
     if (TENT[p.etapa]) {
       acts.push(p.novaCientOk
         ? '<button type="button" class="btn small" data-act="desfazer-nc" data-id="' + esc(p.id) + '">Desfazer marcação</button>'
-        : '<button type="button" class="btn small primary" data-act="novacient" data-id="' + esc(p.id) + '">' + (p.etapa === 'POSTAL2' ? 'Marcar edital gerado no GAIA' : 'Marcar nova cientificação gerada no GAIA') + '</button>');
+        : '<button type="button" class="btn small primary" data-act="novacient" data-id="' + esc(p.id) + '">' + (p.etapa === 'POSTAL2' ? 'Marcar edital gerado no GAIA' : p.etapa === 'SEMGERAR' ? 'Marcar cientificação gerada no GAIA' : 'Marcar nova cientificação gerada no GAIA') + '</button>');
     }
     if (p.temArquivo) acts.push('<button type="button" class="btn small" data-act="baixar" data-id="' + esc(p.id) + '">Baixar comprovante</button>');
     if (p.status === 'Entregue' && p.dataEntrega) {
