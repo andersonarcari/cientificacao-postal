@@ -317,6 +317,18 @@ footer .wrap{padding-block:16px;border-top:1px solid var(--line)}
           </div>
         </fieldset>
 
+        <div class="field" id="fin-wrap" hidden>
+          <label class="lbl" for="fin">Finalidade</label>
+          <select id="fin">
+            <option value="">Escolha a finalidade</option>
+            <option value="EMENDA">Emenda de defesa</option>
+            <option value="DEFESA NÃO CONHECIDA">Não conhecimento + DAE</option>
+            <option value="ENVIO DAE">DAE (pedido de pagamento)</option>
+            <option value="COMUNICAÇÃO APREENSÃO">Existência de apreensão</option>
+            <option value="OUTRO">Outro</option>
+          </select>
+        </div>
+
         <div class="field" id="tent-wrap" hidden>
           <label class="lbl" for="tent">Situação da cientificação</label>
           <select id="tent">
@@ -844,7 +856,7 @@ function botaoLancado(p) {
     : '<button type="button" class="btn small primary" data-act="lancado" data-id="' + esc(p.id) + '">Marcar como lançado no GAIA</button>';
 }
 function itemPostagem(p) {
-  const tipo = p.tipo === 'CIENTIFICACAO' ? 'Cientificação' : 'Interna';
+  const tipo = p.tipo === 'CIENTIFICACAO' ? 'Cientificação' : 'Interna' + (p.finalidade ? ' · ' + esc(FINALIDADES[p.finalidade] || p.finalidade) : '');
   const linha1 = 'Auto <strong>' + esc(p.numAuto) + '/' + esc(p.anoAuto) + '</strong> · ' + tipo + (p.agenteNome ? ' · ' + esc(p.agenteNome) : '') + etiquetaTentativa(p);
   const partes = [textoEnvio(p)];
   if (p.dataEntrega) partes.push((p.status === 'Devolvido' ? 'Devolvida em ' : 'Entregue em ') + '<strong>' + esc(p.dataEntrega) + '</strong>');
@@ -1173,7 +1185,8 @@ $('cod').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDe
 $('aut').addEventListener('input', e => { e.target.value = soDigitos(e.target.value); });
 $('aut').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); salvarPostagem(true, $('pp-outra')); } });
 function tipoSel() { return $('t-cp').checked ? 'CIENTIFICACAO' : $('t-pi').checked ? 'INTERNA' : ''; }
-function mudouTipo() { const c = tipoSel() !== 'CIENTIFICACAO'; $('ag-wrap').hidden = c; $('tent-wrap').hidden = c; sugerirTentativa(); }
+const FINALIDADES = { 'EMENDA': 'Emenda de defesa', 'DEFESA NÃO CONHECIDA': 'Não conhecimento + DAE', 'ENVIO DAE': 'DAE (pedido de pagamento)', 'COMUNICAÇÃO APREENSÃO': 'Existência de apreensão', 'OUTRO': 'Outro' };
+function mudouTipo() { const t = tipoSel(), c = t !== 'CIENTIFICACAO'; $('ag-wrap').hidden = c; $('tent-wrap').hidden = c; $('fin-wrap').hidden = t !== 'INTERNA'; sugerirTentativa(); }
 /* Se o auto já tem carta devolvida nesta SRAI, esta é a 2ª tentativa postal. */
 function sugerirTentativa() {
   const msg = $('tent-msg'); S.tentAnterior = '';
@@ -1380,6 +1393,10 @@ async function salvarPostagem(manter, btn) {
   if (!$('aut').value) return setMsg(m, 'bad', 'Informe o número do auto.');
   const tipo = tipoSel(); if (!tipo) return setMsg(m, 'bad', 'Escolha o tipo de postagem.');
   const d = { sraiId: S.srai, codigo: $('cod').value, numAuto: $('aut').value, anoAuto: $('ano').value, tipo, obs: $('obs').value.trim() };
+  if (tipo === 'INTERNA') {
+    d.finalidade = $('fin').value;
+    if (!FINALIDADES[d.finalidade]) { setMsg(m, 'bad', 'Escolha a finalidade da postagem interna.'); $('fin').focus(); return; }
+  }
   if (tipo === 'CIENTIFICACAO') {
     d.agenteNpm = $('ag-npm').value;
     d.tentativa = $('tent').value;
@@ -1412,14 +1429,14 @@ async function salvarPostagem(manter, btn) {
         toast('Postagem ' + r.id + ' atualizada.');
         return;
       }
-      recentes.unshift({ codigo: d.codigo, txt: 'Auto ' + d.numAuto + '/' + d.anoAuto + ' · ' + (tipo === 'CIENTIFICACAO' ? 'Cientificação' : 'Interna') });
+      recentes.unshift({ codigo: d.codigo, txt: 'Auto ' + d.numAuto + '/' + d.anoAuto + ' · ' + (tipo === 'CIENTIFICACAO' ? 'Cientificação' : 'Interna · ' + FINALIDADES[d.finalidade]) });
       $('pp-recentes').innerHTML = recentes.slice(0, 10).map(x => '<li class="item"><div class="item-top"><span class="cod">' + esc(x.codigo) + '</span><span class="chip aguarda">Aguardando 1ª consulta</span></div><div class="meta">' + esc(x.txt) + '</div></li>').join('');
       $('pp-recentes-wrap').hidden = false;
       if (S.postagens) S.postagens = null;
       setMsg(m, r.aviso ? 'warn' : 'ok', 'Postagem salva (' + r.id + ').' + (r.preCadastro ? ' O agente ficou pré-cadastrado.' : '') + (r.aviso ? ' ' + r.aviso : ''));
       $('cod').value = ''; $('aut').value = ''; $('obs').value = ''; $('tent').value = ''; setMsg($('tent-msg'), '', ''); checarCodigo();
       if (!manter) {
-        $('t-pi').checked = false; $('t-cp').checked = false; mudouTipo();
+        $('t-pi').checked = false; $('t-cp').checked = false; $('fin').value = ''; mudouTipo();
         $('ag-npm').value = ''; $('ag-nome').value = ''; $('ag-pre').hidden = true; setMsg($('ag-info'), '', ''); agEncontrado = null;
         $('ag-busca').value = ''; agSel = null; $('ag-novo').hidden = true; fecharLista();
       } else if (r.preCadastro && d.agenteNome) {
@@ -1438,7 +1455,7 @@ S.editando = null;
 function isoDeBr(s) { const m = String(s || '').match(/^(\d{2})\/(\d{2})\/(\d{4})/); return m ? m[3] + '-' + m[2] + '-' + m[1] : ''; }
 function limparFormularioPostagem() {
   $('cod').value = ''; $('aut').value = ''; $('obs').value = ''; $('tent').value = ''; setMsg($('tent-msg'), '', '');
-  $('t-pi').checked = false; $('t-cp').checked = false; mudouTipo();
+  $('t-pi').checked = false; $('t-cp').checked = false; $('fin').value = ''; mudouTipo();
   $('ag-npm').value = ''; $('ag-nome').value = ''; $('ag-pre').hidden = true; setMsg($('ag-info'), '', ''); agEncontrado = null;
   $('ag-busca').value = ''; agSel = null; $('ag-novo').hidden = true; fecharLista(); mostrarParecidos(null);
   agConfirmado = false; agPendente = null;
@@ -1462,6 +1479,7 @@ function iniciarEdicao(p) {
   $('aut').value = p.numAuto;
   $('obs').value = p.obs || '';
   $('tent').value = p.tentativa || '';
+  $('fin').value = FINALIDADES[p.finalidade] ? p.finalidade : '';
   $('t-cp').checked = p.tipo === 'CIENTIFICACAO'; $('t-pi').checked = p.tipo !== 'CIENTIFICACAO'; mudouTipo();
   if (p.tipo === 'CIENTIFICACAO' && p.agenteNpm) {
     selecionarAgente({ npm: p.agenteNpm, exibicao: p.agenteNome || ('Nº PM ' + p.agenteNpm + ' (sem cadastro)') });
