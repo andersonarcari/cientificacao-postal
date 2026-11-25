@@ -773,7 +773,9 @@ function grupo(p) {
   if (p.status === 'Verificar manualmente') return 'verificar';
   return 'andamento';
 }
-function pendenteGaia(p) { return p.tipo === 'CIENTIFICACAO' && p.status === 'Entregue' && !p.lancadoGaia && p.situacao !== 'CANCELADA'; }
+/* Falta lançar no GAIA: cientificação entregue ou devolvida ainda sem a marcação "Lançado no GAIA" (do agente ou da SRAI). */
+function finalizadaCient(p) { return p.tipo === 'CIENTIFICACAO' && !!p.dataEntrega && (p.status === 'Entregue' || p.status === 'Devolvido') && p.situacao !== 'CANCELADA'; }
+function pendenteGaia(p) { return finalizadaCient(p) && !p.lancadoGaia; }
 /* Tentativas de cientificação frustradas. A etapa vem do servidor:
    EMAIL (marcada no cadastro), POSTAL1 (1ª carta devolvida) e POSTAL2 (2ª carta devolvida). */
 const TENT = {
@@ -786,16 +788,14 @@ const TENT = {
   POSTAL2: { titulo: '2ª tentativa de cientificação postal frustrada', curto: '2ª tentativa postal frustrada · edital',
     instrucao: 'Preencha no GAIA os dados da devolução, gere uma nova cientificação por edital para este auto e finalize com os dados quando ocorrer a publicação.' }
 };
-function pendenteTent(p) { return !!TENT[p.etapa] && !p.novaCientOk && p.situacao !== 'CANCELADA'; }
-function pendente(p) { return pendenteGaia(p) || pendenteTent(p); }
+function pendenteTent(p) { return !!TENT[p.etapa] && !p.lancadoGaia && p.situacao !== 'CANCELADA'; }
+function pendente(p) { return pendenteGaia(p); }
 function faixaTentativa(p) {
-  const e = TENT[p.etapa]; if (!e) return '';
-  const feito = p.etapa === 'POSTAL2' ? 'Edital gerado no GAIA' : p.etapa === 'SEMGERAR' ? 'Cientificação gerada no GAIA' : 'Nova cientificação gerada no GAIA';
-  return '<div class="tent' + (p.novaCientOk ? ' ok' : '') + '"><strong>' + e.titulo + '</strong><span>' + e.instrucao + '</span>' +
-    (p.novaCientOk ? '<em>✓ ' + feito + (p.novaCientOkEm ? ' em ' + esc(String(p.novaCientOkEm).slice(0, 10)) : '') + '</em>' : '') + '</div>';
+  const e = TENT[p.etapa]; if (!e || p.lancadoGaia) return '';
+  return '<div class="tent"><strong>' + e.titulo + '</strong><span>' + e.instrucao + '</span></div>';
 }
 function etiquetaTentativa(p) {
-  if (TENT[p.etapa]) return ' · <span class="etq">' + TENT[p.etapa].curto + (pendenteTent(p) ? ' (agente ainda não marcou)' : '') + '</span>';
+  if (TENT[p.etapa]) return ' · <span class="etq">' + TENT[p.etapa].curto + '</span>';
   if (p.tentativa === 'POSTAL1') return ' · 2ª tentativa postal';
   return '';
 }
@@ -838,15 +838,21 @@ function renderPostagens() {
   }
   $('p-lista').innerHTML = lista.length ? lista.map(itemPostagem).join('') : '<li class="vazio">Nenhuma postagem com esses filtros.</li>';
 }
+function botaoLancado(p) {
+  return p.lancadoGaia
+    ? '<button type="button" class="btn small" data-act="desfazer" data-id="' + esc(p.id) + '">Desfazer lançamento</button>'
+    : '<button type="button" class="btn small primary" data-act="lancado" data-id="' + esc(p.id) + '">Marcar como lançado no GAIA</button>';
+}
 function itemPostagem(p) {
   const tipo = p.tipo === 'CIENTIFICACAO' ? 'Cientificação' : 'Interna';
   const linha1 = 'Auto <strong>' + esc(p.numAuto) + '/' + esc(p.anoAuto) + '</strong> · ' + tipo + (p.agenteNome ? ' · ' + esc(p.agenteNome) : '') + etiquetaTentativa(p);
   const partes = [textoEnvio(p)];
   if (p.dataEntrega) partes.push((p.status === 'Devolvido' ? 'Devolvida em ' : 'Entregue em ') + '<strong>' + esc(p.dataEntrega) + '</strong>');
   else if (p.ultimaConsulta) partes.push('Última consulta ' + esc(p.ultimaConsulta.slice(0, 16)));
-  if (p.tipo === 'CIENTIFICACAO' && p.dataEntrega && p.status === 'Entregue') partes.push(p.lancadoGaia ? 'Lançado no GAIA' : '<strong>Falta lançar no GAIA</strong>');
+  if (finalizadaCient(p)) partes.push(p.lancadoGaia ? 'Lançado no GAIA em ' + esc(String(p.lancadoGaiaEm).slice(0, 10)) + (p.lancadoGaiaPor ? ' por ' + esc(p.lancadoGaiaPor) : '') : '<strong class="etq">Falta lançar no GAIA</strong>');
   const acts = [];
   if (p.situacao !== 'CANCELADA') acts.push('<button type="button" class="btn small" data-act="editar" data-id="' + esc(p.id) + '">Editar</button>');
+  if (finalizadaCient(p)) acts.push(botaoLancado(p));
   if (p.temArquivo) acts.push('<button type="button" class="btn small" data-act="baixar" data-id="' + esc(p.id) + '">Baixar comprovante</button>');
   if (p.situacao === 'ABERTA') acts.push('<button type="button" class="btn small" data-act="cancelar" data-id="' + esc(p.id) + '">Cancelar</button>');
   acts.push('<button type="button" class="btn small perigo" data-act="excluir" data-id="' + esc(p.id) + '">Apagar</button>');
@@ -907,9 +913,12 @@ async function acaoItem(e, lista) {
     ocupado(b, async () => {
       try {
         const r = await api('marcarLancado', { id: p.id, valor });
-        p.lancadoGaia = r.lancadoGaia; p.lancadoGaiaEm = r.lancadoGaiaEm;
-        renderMinhas(); toast(valor ? 'Marcado como lançado no GAIA.' : 'Marcação desfeita.');
-        if (S.postagens) { const q = S.postagens.find(x => x.id === p.id); if (q) { q.lancadoGaia = p.lancadoGaia; q.lancadoGaiaEm = p.lancadoGaiaEm; } }
+        [S.minhas, S.postagens].forEach(l => (l || []).forEach(q => {
+          if (q.id === p.id) { q.lancadoGaia = r.lancadoGaia; q.lancadoGaiaEm = r.lancadoGaiaEm; q.lancadoGaiaPor = r.lancadoGaiaPor || ''; }
+        }));
+        if (S.minhas) renderMinhas();
+        if (S.postagens) renderPostagens();
+        toast(valor ? 'Marcado como lançado no GAIA.' : 'Marcação desfeita.');
       } catch (err) { toast(err.message); }
     });
   }
@@ -923,30 +932,23 @@ async function carregarMinhas() {
 }
 function renderMinhas() {
   const lista = (S.minhas || []).slice().sort((a, b) => (pendente(b) - pendente(a)) || b.id.localeCompare(a.id));
-  const pend = lista.filter(pendenteGaia).length, pendT = lista.filter(pendenteTent).length;
+  const pend = lista.filter(pendenteGaia).length, pendT = lista.filter(p => pendenteTent(p) && !p.dataEntrega).length;
   const avisos = [];
-  if (pendT) avisos.push(pendT + (pendT === 1 ? ' auto precisa' : ' autos precisam') + ' de nova cientificação no GAIA');
-  if (pend) avisos.push(pend + (pend === 1 ? ' entrega falta' : ' entregas faltam') + ' lançar no GAIA');
+  if (pendT) avisos.push(pendT + (pendT === 1 ? ' auto precisa' : ' autos precisam') + ' de cientificação gerada no GAIA');
+  if (pend) avisos.push(pend + (pend === 1 ? ' auto falta' : ' autos faltam') + ' lançar no GAIA');
   setMsg($('m-msg'), avisos.length ? 'warn' : 'info', lista.length ? (avisos.length ? avisos.join(' · ') + '.' : 'Nada pendente no GAIA.') : '');
   if (!lista.length) { $('m-lista').innerHTML = '<li class="vazio">Nenhuma cientificação no seu Nº PM por enquanto. Quando uma SRAI cadastrar a cientificação de um auto seu, ela aparece aqui.</li>'; return; }
   $('m-lista').innerHTML = lista.map(p => {
     const acts = [];
-    if (TENT[p.etapa]) {
-      acts.push(p.novaCientOk
-        ? '<button type="button" class="btn small" data-act="desfazer-nc" data-id="' + esc(p.id) + '">Desfazer marcação</button>'
-        : '<button type="button" class="btn small primary" data-act="novacient" data-id="' + esc(p.id) + '">' + (p.etapa === 'POSTAL2' ? 'Marcar edital gerado no GAIA' : p.etapa === 'SEMGERAR' ? 'Marcar cientificação gerada no GAIA' : 'Marcar nova cientificação gerada no GAIA') + '</button>');
-    }
+    if (finalizadaCient(p)) acts.push(botaoLancado(p));
     if (p.temArquivo) acts.push('<button type="button" class="btn small" data-act="baixar" data-id="' + esc(p.id) + '">Baixar comprovante</button>');
-    if (p.status === 'Entregue' && p.dataEntrega) {
-      acts.push(p.lancadoGaia
-        ? '<button type="button" class="btn small" data-act="desfazer" data-id="' + esc(p.id) + '">Desfazer lançamento</button>'
-        : '<button type="button" class="btn small primary" data-act="lancado" data-id="' + esc(p.id) + '">Marcar como lançado no GAIA</button>');
-    }
-    const entrega = p.dataEntrega ? (p.status === 'Devolvido' ? 'Devolvida em ' : 'Entregue em ') + '<strong>' + esc(p.dataEntrega) + '</strong>' : textoEnvio(p);
-    const gaia = p.lancadoGaia ? ' · Lançado no GAIA em ' + esc(String(p.lancadoGaiaEm).slice(0, 10)) : '';
+    const gaia = p.lancadoGaia ? '<strong>Lançado no GAIA em ' + esc(String(p.lancadoGaiaEm).slice(0, 10)) + '</strong>' + (p.lancadoGaiaPor ? ' por ' + esc(p.lancadoGaiaPor) : '') + ' · ' : '';
+    // Entregue/devolvida: data e código já estão no bloco "Dados para o GAIA", então não repetimos.
+    const metas = p.dataEntrega
+      ? '<div class="meta">' + gaia + esc(p.sraiNome) + '</div>'
+      : '<div class="meta">' + textoEnvio(p) + '</div><div class="meta"><span class="mono">' + esc(p.codigo) + '</span> · ' + esc(p.sraiNome) + '</div>';
     return '<li class="item' + (pendente(p) ? ' destaque' : '') + '"><div class="item-top"><span>Auto <strong>' + esc(p.numAuto) + '/' + esc(p.anoAuto) + '</strong></span><span class="chip ' + classeStatus(p) + '">' + esc(rotuloStatus(p)) + '</span></div>' +
-      faixaTentativa(p) +
-      '<div class="meta">' + entrega + gaia + '</div><div class="meta"><span class="mono">' + esc(p.codigo) + '</span> · ' + esc(p.sraiNome) + '</div>' +
+      faixaTentativa(p) + metas +
       (p.dataEntrega ? blocoGaia(p) : '') +
       (acts.length ? '<div class="item-acts">' + acts.join('') + '</div>' : '') + '</li>';
   }).join('');
